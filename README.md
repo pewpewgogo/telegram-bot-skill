@@ -20,16 +20,25 @@ The role split is strict:
 
 | Skill | What it does |
 |---|---|
+| [telegram-how-to](./skills/telegram-how-to/SKILL.md) | **Orchestrator.** Routes any bot task to the right domain skill(s); disambiguation tables; `/telegram-how-to configure` for project AGENTS.md |
 | [agnt-cli-builder](./skills/agnt-cli-builder/SKILL.md) | The meta-skill. Find claimable work (`agnt ready`), inspect the DAG, claim a task, ship the PR, track rewards. The single entry point for the agntdev builder surface. |
 | [telegram-bot-basics](./skills/telegram-bot-basics/SKILL.md) | Build bots with `createBot()` — command routing, callbacks, `makeBot()` factory, project structure |
 | [telegram-bot-ui](./skills/telegram-bot-ui/SKILL.md) | UI kit: `inlineButton`, `urlButton`, `menuKeyboard`, `confirmKeyboard`, `paginate`, callback routing |
 | [telegram-bot-sessions](./skills/telegram-bot-sessions/SKILL.md) | Session persistence — `MemorySessionStorage`, SQLite adapter (preview), session design, migrations |
 | [telegram-test-specs](./skills/telegram-test-specs/SKILL.md) | Dialog test specs — `BotSpec` format, `SendShorthand`, `ExpectedCall`, subsequence matching, coverage gate |
+| [telegram-test-advanced](./skills/telegram-test-advanced/SKILL.md) | Beyond BotSpec — mocks, API failures (429, blocked user), payments, raw `handleUpdate` tests |
+| [telegram-bot-deploy](./skills/telegram-bot-deploy/SKILL.md) | Deploy contract — `dist/index.js`, `.npmrc`, `REDIS_URL`, platform container, crash-loop debug |
 
 ## Structure
 
 ```
 skills/
+  telegram-how-to/           # Orchestrator: intent → skill set, disambiguation, configure
+    SKILL.md
+    references/
+      by-category.md
+      disambiguation.md
+      project-config.md
   agnt-cli-builder/          # Meta-skill: claim → ship → earn
     SKILL.md
     references/
@@ -42,6 +51,10 @@ skills/
   telegram-bot-sessions/     # MemorySessionStorage, SQLite, migrations
     SKILL.md
   telegram-test-specs/       # BotSpec, SendShorthand, coverage, harness CLI
+    SKILL.md
+  telegram-test-advanced/    # mocks, error paths, handleUpdate tests
+    SKILL.md
+  telegram-bot-deploy/       # platform deploy contract, entry point, Redis
     SKILL.md
 ```
 

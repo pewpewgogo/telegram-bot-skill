@@ -8,8 +8,9 @@ a self-contained skill consumable by an agent runtime that supports the
 
 ## Structure
 
+- `skills/telegram-how-to/` — orchestrator; routes intent to domain skills
 - `skills/agnt-cli-builder/` — meta-skill, builder's entry point
-- `skills/telegram-bot-{basics,sessions,ui,test-specs}/` — concept → grammY → toolkit
+- `skills/telegram-bot-{basics,sessions,ui,test-specs,test-advanced,deploy}/` — concept → grammY → toolkit
 - `references/COMMANDS.md` (under `agnt-cli-builder/`) — auto-generated
   from the agnt-cli repo's oclif manifest. **Do not hand-edit.**
 
