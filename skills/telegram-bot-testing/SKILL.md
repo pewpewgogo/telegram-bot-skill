@@ -7,7 +7,7 @@ description: >
   Triggers: test telegram bot, mock telegram api, bot.handleUpdate, transformer mock,
   synthetic update, assert sendMessage, vitest bot, unit test handler, fake update,
   test without token.
-compatibility: grammY v1 (`grammy`) + any test runner (vitest/jest). For the agnt-gm BotSpec harness see telegram-test-specs.
+compatibility: grammY v1 (`grammy`) + any test runner (vitest/jest).
 license: MIT
 ---
 
@@ -15,9 +15,7 @@ license: MIT
 
 Bots are pure-ish functions: an `Update` goes in, API calls come out. Test by **capturing the
 outgoing calls** and feeding **synthetic updates** — no token, no network. Build/run split →
-[telegram-bot-basics](../telegram-bot-basics/SKILL.md). (On the agnt-gm platform, the
-declarative harness is [telegram-test-specs](../telegram-test-specs/SKILL.md) /
-[telegram-test-advanced](../telegram-test-advanced/SKILL.md) — this skill is the framework-agnostic layer.)
+[telegram-bot-basics](../telegram-bot-basics/SKILL.md).
 
 ## Capture outgoing calls with a transformer
 

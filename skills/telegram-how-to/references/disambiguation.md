@@ -35,44 +35,27 @@ Boundary tables for when two skills look alike. Route to the **owner** skill; us
 
 ---
 
-## 3. Testing: generic vs the agnt-gm harness
-
-| Topic | Owner | Secondary |
-| --- | --- | --- |
-| Transformer capture + `handleUpdate` (any project) | `telegram-bot-testing` | the domain skill under test |
-| BotSpec JSON, coverage gate, harness CLI (agnt-gm) | `telegram-test-specs` | `telegram-bot-testing` for the underlying technique |
-| Mock DB/HTTP, 429/blocked-user, payments (agnt-gm) | `telegram-test-advanced` | `telegram-test-specs` |
-
-Both layers use the same core idea (intercept outgoing API calls, feed synthetic updates); `telegram-bot-testing` is the framework-agnostic version, the `telegram-test-*` skills add the platform's spec format and gate.
-
----
-
-## 4. Deploy: generic vs agnt-gm platform
+## 3. Deploy vs scaling
 
 | Symptom | Owner | Secondary |
 | --- | --- | --- |
 | Webhook vs polling, hosting, serverless, graceful shutdown | `telegram-bot-deploy` | `telegram-bot-security` (webhook secret) |
 | `409 Conflict` (two consumers) | `telegram-bot-deploy` | — |
-| `dist/index.js` entry, `.npmrc`, `REDIS_URL`, container crash on agnt-gm | `agntdev-deploy` | `telegram-bot-deploy` for the generic concept |
+| Concurrency, 429/flood, per-user spam | `telegram-bot-scaling` | — |
 | Scaling out to many instances | `telegram-bot-scaling` | `telegram-bot-deploy` (webhooks), `telegram-bot-sessions` (shared store) |
 
 ---
 
-## 5. Basics vs deploy
+## 4. Basics vs deploy
 
 | Symptom | Owner |
 | --- | --- |
 | Wrong handler logic / routing order | `telegram-bot-basics` |
-| Builds locally, crashes in prod | `telegram-bot-deploy` (or `agntdev-deploy` on platform) |
+| Builds locally, crashes in prod | `telegram-bot-deploy` |
 | No error boundary, bot dies on a throw | `telegram-bot-basics` (`bot.catch`) |
 
 ---
 
-## 6. Pipeline vs implementation (agnt-gm only)
+## 5. Three-layer mental model (all skills)
 
-| Topic | Owner | Secondary |
-| --- | --- | --- |
-| `agnt ready`, claim, PR, payouts | `agnt-cli-builder` | the general skill for the code |
-| How to implement the feature | the general skill | `agnt-cli-builder` at session start only |
-
-**Rule:** load the agnt-gm tier only when the user is a builder on that platform. For generic grammY bots, stay in the general core.
+Every skill teaches in order: **Bot API** (raw HTTP/JSON shape) → **grammY** (`ctx`, plugins, routing). If an agent jumps to a plugin helper without understanding grammY routing, load `telegram-bot-basics` as secondary even when the primary is `telegram-bot-ui` or `telegram-bot-sessions`.

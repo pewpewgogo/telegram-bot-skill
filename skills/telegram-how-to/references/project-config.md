@@ -50,7 +50,6 @@ telegram-bot-basics
 | `web_app` / `initData` / inline mode | `telegram-bot-mini-apps` |
 | any test files | `telegram-bot-testing` |
 | auth / token / untrusted input handling | `telegram-bot-security` |
-| `agnt` CLI / BotSpec / `dist/index.js` on agnt-gm | `agnt-cli-builder`, `telegram-test-specs`, `agntdev-deploy` |
 
 Remind the user: each always-loaded skill adds ~80–150 description tokens to every session.
 

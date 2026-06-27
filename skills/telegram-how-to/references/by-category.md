@@ -4,29 +4,27 @@ Short identifiers match directory names under `skills/`. Load paths are sibling 
 
 ---
 
-## General grammY core
-
-### Core
+## Core
 
 | Skill | Use when |
 | --- | --- |
 | `telegram-bot-basics` | Bot API mental model, `new Bot()`, command/`hears`/filter-query routing, middleware & `Composer`, `bot.catch`, `setMyCommands`, build/run split, project structure |
 
-### UI & messages
+## UI & messages
 
 | Skill | Use when |
 | --- | --- |
 | `telegram-bot-ui` | `InlineKeyboard`/`Keyboard`, callback routing & `answerCallbackQuery`, `@grammyjs/menu`, pagination, confirm dialogs, edit vs new message |
 | `telegram-bot-messages` | HTML/MarkdownV2 + `@grammyjs/parse-mode` `fmt`, entities, edit/delete, media (`InputFile`, photo/doc), `file_id` reuse, downloads (`@grammyjs/files`) |
 
-### State & flows
+## State & flows
 
 | Skill | Use when |
 | --- | --- |
 | `telegram-bot-sessions` | `ctx.session`, session key/scope, storage adapters (memory/Redis/file/free), `lazySession`, shape design, migrations |
 | `telegram-bot-conversations` | `@grammyjs/conversations` multi-step dialogs, `wait`/`waitFor`/forms, the replay model + `conversation.external()` |
 
-### Production
+## Production
 
 | Skill | Use when |
 | --- | --- |
@@ -34,29 +32,18 @@ Short identifiers match directory names under `skills/`. Load paths are sibling 
 | `telegram-bot-scaling` | `@grammyjs/runner` `run()`, `sequentialize`, `apiThrottler`/`auto-retry` for 429, `@grammyjs/ratelimiter` |
 | `telegram-bot-security` | token hygiene, webhook secret, input validation, authz by `ctx.from.id`, abuse/flood limits |
 
-### Advanced
+## Advanced
 
 | Skill | Use when |
 | --- | --- |
 | `telegram-bot-payments` | `sendInvoice`, Telegram Stars (`XTR`), `pre_checkout_query`, `successful_payment`, refunds |
 | `telegram-bot-mini-apps` | Web App buttons, `web_app_data`, **initData HMAC validation**, inline mode |
 
-### Testing
+## Testing
 
 | Skill | Use when |
 | --- | --- |
-| `telegram-bot-testing` | generic grammY testing — transformer to capture API calls, synthetic `Update` + `bot.handleUpdate`, vitest/jest |
-
----
-
-## agnt-gm platform tier (load only on that platform)
-
-| Skill | Use when |
-| --- | --- |
-| `agnt-cli-builder` | finding claimable tasks (`agnt ready`), inspecting the DAG, claiming, auth, PR status, TON balance |
-| `telegram-test-specs` | BotSpec JSON, `SendShorthand`, `ExpectedCall`, harness CLI, coverage gate, `commands.json` |
-| `telegram-test-advanced` | mocking DB/HTTP/payments, simulating 429/blocked-user/message-not-modified, raw `handleUpdate` tests with DI |
-| `agntdev-deploy` | `dist/index.js`, `.npmrc`, `NODE_AUTH_TOKEN`, `REDIS_URL`, platform Dockerfile contract, crash loops |
+| `telegram-bot-testing` | transformer to capture API calls, synthetic `Update` + `bot.handleUpdate`, vitest/jest |
 
 ---
 
@@ -70,5 +57,3 @@ Short identifiers match directory names under `skills/`. Load paths are sibling 
 | Mini App with authenticated backend | `telegram-bot-mini-apps` + `telegram-bot-security` |
 | High-traffic broadcast bot | `telegram-bot-scaling` + `telegram-bot-deploy` + `telegram-bot-sessions` |
 | Bot exits immediately in production | `telegram-bot-deploy` + `telegram-bot-basics` |
-| **agnt-gm:** claim "add pagination to list" | `agnt-cli-builder` + `telegram-bot-ui` + `telegram-test-specs` |
-| **agnt-gm:** payment error-path test | `telegram-test-advanced` + `telegram-test-specs` |

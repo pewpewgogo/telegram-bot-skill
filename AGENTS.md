@@ -5,60 +5,32 @@
 A grammY Telegram-bot **skill collection** (modeled on samber/cc-skills-golang).
 Each `skills/<name>/` directory is a self-contained skill consumable by any agent
 runtime that supports the `name` + `description` frontmatter protocol (Claude,
-Cursor, Copilot, etc.). Two tiers: a **general grammY core** and an **agnt-gm
-platform tier**.
+Cursor, Copilot, etc.).
 
 ## Structure
 
-- `skills/telegram-how-to/` — orchestrator; routes intent to both tiers; `references/` hold the catalog, disambiguation tables, and the configure template
-- **General core:** `skills/telegram-bot-{basics,ui,sessions,conversations,messages,scaling,deploy,payments,mini-apps,testing,security}/` — pure grammY, no platform lock-in
-- **agnt-gm tier:** `skills/{agnt-cli-builder,telegram-test-specs,telegram-test-advanced,agntdev-deploy}/` — correct but platform-specific
+- `skills/telegram-how-to/` — orchestrator; routes intent to the domain skills; `references/` hold the catalog, disambiguation tables, and the configure template
+- `skills/telegram-bot-{basics,ui,sessions,conversations,messages,scaling,deploy,payments,mini-apps,testing,security}/` — the domain skills
 - `RULES.md` (repo root) — consolidated cross-cutting rule set
-- `references/COMMANDS.md` (under `agnt-cli-builder/`) — auto-generated
-  from the agnt-cli repo's oclif manifest. **Do not hand-edit.**
 
-## Authoring conventions (general core)
+## Authoring conventions
 
-- **Pure grammY only** — no `@agntdev/*` imports, no `createBot`/`makeBot` toolkit
-  helpers. Platform specifics belong in the agnt-gm tier.
-- **Verify grammY APIs against grammy.dev** before writing snippets — wrong API
-  names are what make a skill "wrong."
+- **Pure grammY only** — no framework or platform lock-in in the snippets. Verify APIs
+  against grammy.dev before writing — wrong API names are what make a skill "wrong."
 - Keep each `SKILL.md` to the lean bar set by `telegram-bot-basics`: concept → API →
   minimal snippet, a `## Common mistakes` block, sibling cross-refs, a quick reference.
-
-## Regenerating the COMMANDS.md reference
-
-The `agnt-cli-builder/references/COMMANDS.md` file is auto-generated
-from the agnt-cli repo's oclif manifest. It is the source of truth for
-the command tree the skill teaches agents.
-
-After any change in agnt-cli commands, regen the file from the agnt-cli
-repo:
-
-```sh
-# From the agnt-cli repo root:
-npx oclif readme --readme-path ../agntdev-skills/skills/agnt-cli-builder/references/COMMANDS.md
-```
-
-**Never hand-edit `references/COMMANDS.md`.** Hand-edits get clobbered
-on the next regen. The oclif-generated version is authoritative
-(aliases, source links, ordering, exit code notes all match the
-runtime). The only thing the skill author edits is the `SKILL.md`
-file in each skill — that one is hand-written.
-
-The corresponding note lives in `agnt-cli/AGENTS.md` so the CLI side
-also knows the regen command.
+- Cross-reference sibling skills by relative path (`../<name>/SKILL.md`); link the rule
+  set as `../../RULES.md` from a `SKILL.md` and `../../../RULES.md` from a `references/` file.
 
 ## SKILL.md conventions
 
 - `name:` matches the directory name.
-- `description:` is a long string (multi-line YAML `>`). The first
-  sentence is the trigger; the rest is context.
-- `Triggers:` block is a comma-separated list of phrases the agent
-  runtime matches against user input.
-- `compatibility:` line documents required tools / env (Node version,
-  gh CLI, network access).
-- On Activation block: commands to run when the skill loads, before
-  the user asks. Saves a round-trip.
-- Quick Reference block at the bottom: copy-pasteable command list.
-  Keep it in sync with `references/COMMANDS.md`.
+- `description:` is a multi-line YAML `>` block. The first sentence is the trigger; the
+  rest is context. It must include a `Triggers:` line — a comma-separated list of phrases
+  the agent runtime matches against user input.
+- `compatibility:` documents required tools / env (grammY version, Node version, plugins).
+- `license:` is an SPDX id from the set the validator allows (use `MIT`).
+- A copy-pasteable **Quick reference** block at the bottom.
+
+Run `node scripts/validate-skills.mjs` before committing — it checks frontmatter and that
+every `references/` link resolves.
