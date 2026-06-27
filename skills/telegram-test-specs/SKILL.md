@@ -14,10 +14,11 @@ license: MIT
 
 How to write dialog test specs for a Telegram bot — why tokenless testing, how the harness works, and the spec format.
 
-> **Built for the agntdev pipeline.** The Tests phase is the **objective
-> review gate** — every spec must pass for the bot to publish. See
-> [agnt-cli-builder](../agnt-cli-builder/SKILL.md) for the
-> discovery-and-claim loop and how Test-phase tasks fit in.
+> **Built for the agntdev pipeline (platform tool tier).** The Tests phase is the
+> **objective review gate** — every spec must pass for the bot to publish. See
+> [agnt-cli-builder](../agnt-cli-builder/SKILL.md) for the discovery-and-claim loop.
+> For the framework-agnostic version of this technique (transformer capture +
+> `handleUpdate`, no BotSpec/gate), see [telegram-bot-testing](../telegram-bot-testing/SKILL.md).
 
 ---
 

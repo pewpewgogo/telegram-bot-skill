@@ -1,69 +1,80 @@
-# agntdev-skills
+# telegram-bot-skills
 
-Agent skills for the agntdev bot-building pipeline on agnt-gm.ai. Builders claim tasks, ship code, earn TON + project tokens.
+A comprehensive, cross-referenced **agent skill collection for building Telegram bots
+with grammY** (TypeScript/JavaScript) — modeled on the structure of
+[samber/cc-skills-golang](https://github.com/samber/cc-skills-golang).
 
-## What is agntdev
+Each `skills/<name>/SKILL.md` is a self-contained skill an agent loads when triggered.
+An orchestrator (`telegram-how-to`) routes any bot task to the right skill(s), and
+[`RULES.md`](./RULES.md) is the consolidated cross-cutting rule set.
 
-agntdev is the agnt-gm.ai pivot from "any app bounties" to a focused
-**Telegram bot** building pipeline. Creators describe a bot in one form
-field in the TMA (no CLI involved), fund a TON pool, and the platform's
-LLM planner drives the project through `general → design → details →
-dev → tests → published`. Builders (agents) use the CLI + these skills
-to claim and ship the resulting tasks.
+## Two tiers
 
-The role split is strict:
-
-- **Creators** use the TMA (`agnt-gm.ai`) only — no CLI, no skills.
-- **Builders** use the CLI (`@agntdev/cli`) + these skills only.
+- **General grammY core** — framework knowledge that works for any bot. Use these by default.
+- **agnt-gm platform tier** — correct but *platform-specific* skills for the
+  [agnt-gm.ai](https://agnt-gm.ai) bot-building pipeline (CLI, BotSpec test harness,
+  container deploy contract). Load only when working on that platform.
 
 ## Skills
 
+### General grammY core
+
 | Skill | What it does |
 |---|---|
-| [telegram-how-to](./skills/telegram-how-to/SKILL.md) | **Orchestrator.** Routes any bot task to the right domain skill(s); disambiguation tables; `/telegram-how-to configure` for project AGENTS.md |
-| [agnt-cli-builder](./skills/agnt-cli-builder/SKILL.md) | The meta-skill. Find claimable work (`agnt ready`), inspect the DAG, claim a task, ship the PR, track rewards. The single entry point for the agntdev builder surface. |
-| [telegram-bot-basics](./skills/telegram-bot-basics/SKILL.md) | Build bots with `createBot()` — command routing, callbacks, `makeBot()` factory, project structure |
-| [telegram-bot-ui](./skills/telegram-bot-ui/SKILL.md) | UI kit: `inlineButton`, `urlButton`, `menuKeyboard`, `confirmKeyboard`, `paginate`, callback routing |
-| [telegram-bot-sessions](./skills/telegram-bot-sessions/SKILL.md) | Session persistence — `MemorySessionStorage`, SQLite adapter (preview), session design, migrations |
-| [telegram-test-specs](./skills/telegram-test-specs/SKILL.md) | Dialog test specs — `BotSpec` format, `SendShorthand`, `ExpectedCall`, subsequence matching, coverage gate |
+| [telegram-how-to](./skills/telegram-how-to/SKILL.md) | **Orchestrator.** Routes any task to the right skill(s); disambiguation tables; `/telegram-how-to configure` writes project rules |
+| [telegram-bot-basics](./skills/telegram-bot-basics/SKILL.md) | Entry point, command/`hears`/filter-query routing, `ctx`, middleware & `Composer`, `bot.catch`, project structure |
+| [telegram-bot-ui](./skills/telegram-bot-ui/SKILL.md) | `InlineKeyboard`/`Keyboard`, callback routing & `answerCallbackQuery`, `@grammyjs/menu`, pagination, confirm dialogs |
+| [telegram-bot-sessions](./skills/telegram-bot-sessions/SKILL.md) | `ctx.session`, session key/scope, storage adapters (memory/Redis/file/free), `lazySession`, migrations |
+| [telegram-bot-conversations](./skills/telegram-bot-conversations/SKILL.md) | Multi-step dialogs with `@grammyjs/conversations` — `wait`/`waitFor`/forms, the replay model, `conversation.external()` |
+| [telegram-bot-messages](./skills/telegram-bot-messages/SKILL.md) | HTML/MarkdownV2 + `@grammyjs/parse-mode`, entities, edit/delete, media (`InputFile`, `file_id`), downloads |
+| [telegram-bot-scaling](./skills/telegram-bot-scaling/SKILL.md) | `@grammyjs/runner`, `sequentialize`, 429/flood with `apiThrottler`/`auto-retry`, `@grammyjs/ratelimiter` |
+| [telegram-bot-deploy](./skills/telegram-bot-deploy/SKILL.md) | Polling vs webhook, `webhookCallback` adapters, `setWebhook` + secret token, serverless/edge, graceful shutdown |
+| [telegram-bot-payments](./skills/telegram-bot-payments/SKILL.md) | `sendInvoice`, Telegram Stars (`XTR`), `pre_checkout_query`, `successful_payment`, refunds |
+| [telegram-bot-mini-apps](./skills/telegram-bot-mini-apps/SKILL.md) | Web App buttons, `web_app_data`, **initData HMAC validation**, inline mode |
+| [telegram-bot-testing](./skills/telegram-bot-testing/SKILL.md) | Generic grammY testing — transformer capture + synthetic `Update` + `bot.handleUpdate` (vitest/jest) |
+| [telegram-bot-security](./skills/telegram-bot-security/SKILL.md) | Token hygiene, webhook secret, input validation, authz by `ctx.from.id`, abuse/flood limits |
+
+### agnt-gm platform tier
+
+| Skill | What it does |
+|---|---|
+| [agnt-cli-builder](./skills/agnt-cli-builder/SKILL.md) | Claim → ship → earn on agnt-gm: `agnt ready`, inspect the DAG, claim a task, ship the PR, track TON rewards |
+| [telegram-test-specs](./skills/telegram-test-specs/SKILL.md) | BotSpec dialog specs, `SendShorthand`, `ExpectedCall`, the harness CLI, command-coverage gate |
 | [telegram-test-advanced](./skills/telegram-test-advanced/SKILL.md) | Beyond BotSpec — mocks, API failures (429, blocked user), payments, raw `handleUpdate` tests |
-| [telegram-bot-deploy](./skills/telegram-bot-deploy/SKILL.md) | Deploy contract — `dist/index.js`, `.npmrc`, `REDIS_URL`, platform container, crash-loop debug |
+| [agntdev-deploy](./skills/agntdev-deploy/SKILL.md) | The agnt-gm deploy contract — `dist/index.js`, `.npmrc`, `REDIS_URL`, platform container, crash-loop debug |
 
 ## Structure
 
 ```
+RULES.md                       # consolidated cross-cutting rule set
 skills/
-  telegram-how-to/           # Orchestrator: intent → skill set, disambiguation, configure
-    SKILL.md
-    references/
-      by-category.md
-      disambiguation.md
-      project-config.md
-  agnt-cli-builder/          # Meta-skill: claim → ship → earn
-    SKILL.md
-    references/
-      COMMANDS.md            # auto-generated from oclif manifest
-      REFERENCE.md           # claimable-gate rules, exit codes, env vars
-  telegram-bot-basics/       # createBot(), makeBot(), routing, callbacks
-    SKILL.md
-  telegram-bot-ui/           # inlineButton, menuKeyboard, paginate, confirmKeyboard
-    SKILL.md
-  telegram-bot-sessions/     # MemorySessionStorage, SQLite, migrations
-    SKILL.md
-  telegram-test-specs/       # BotSpec, SendShorthand, coverage, harness CLI
-    SKILL.md
-  telegram-test-advanced/    # mocks, error paths, handleUpdate tests
-    SKILL.md
-  telegram-bot-deploy/       # platform deploy contract, entry point, Redis
-    SKILL.md
+  telegram-how-to/             # orchestrator: intent → skill set, disambiguation, configure
+    references/{by-category,disambiguation,project-config}.md
+  telegram-bot-basics/         # general grammY core ↓
+  telegram-bot-ui/
+  telegram-bot-sessions/
+  telegram-bot-conversations/
+  telegram-bot-messages/
+  telegram-bot-scaling/
+  telegram-bot-deploy/
+  telegram-bot-payments/
+  telegram-bot-mini-apps/
+  telegram-bot-testing/
+  telegram-bot-security/
+  agnt-cli-builder/            # agnt-gm platform tier ↓
+  telegram-test-specs/
+  telegram-test-advanced/
+  agntdev-deploy/
 ```
 
 ## How skills work
 
-Each skill is a markdown file the agent reads when triggered. They follow a simple format:
+Each skill is a markdown file the agent reads when triggered:
 
-- `SKILL.md` — main instructions with frontmatter (name, description, triggers)
+- `SKILL.md` — instructions with frontmatter (`name`, `description` incl. a `Triggers:` line, `compatibility`, `license`)
 - `references/` — supporting docs loaded on demand
+
+`node scripts/validate-skills.mjs` checks frontmatter and that every `references/` link resolves.
 
 ## License
 

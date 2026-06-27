@@ -1,13 +1,15 @@
 ---
 name: telegram-how-to
 description: >
-  Telegram bot skills orchestrator — load the right skill(s) for any bot task.
-  Routes intent to telegram-bot-basics, sessions, ui, test-specs, test-advanced,
-  deploy, and agnt-cli-builder. Disambiguates overlapping topics (sessions vs
-  conversations, inline vs reply keyboards, declarative vs programmatic tests).
-  Triggers: telegram bot, how to build telegram bot, which telegram skill,
-  telegram bot help, bot skill routing, /telegram-how-to, organize bot work.
-compatibility: Works with grammY and @agntdev/bot-toolkit. agnt-cli-builder needs Node 18+, gh CLI.
+  Telegram bot skills orchestrator — for any bot task, load the right skill(s)
+  together. Routes to the general grammY core (basics, ui, sessions, conversations,
+  messages, scaling, deploy, payments, mini-apps, testing, security) and the agnt-gm
+  platform tier (agnt-cli-builder, telegram-test-specs/-advanced, agntdev-deploy).
+  Disambiguates overlapping topics (sessions vs conversations, ui vs callback routing,
+  general testing vs BotSpec harness, polling vs webhook).
+  Triggers: telegram bot, how to build telegram bot, which telegram skill, grammY,
+  bot skill routing, /telegram-how-to, organize bot work, telegram bot help.
+compatibility: General skills need grammY v1 (Node 18+/Deno). The agnt-gm tier needs the agnt CLI + that platform.
 license: MIT
 user-invocable: true
 ---
@@ -16,90 +18,94 @@ user-invocable: true
 
 **Modes:**
 
-- **Orchestrate** — for any bot coding, review, test, or deploy task, load the primary skill plus all applicable secondary skills at the start.
-- **Disambiguate** — when two skills seem to overlap, show the boundary table. See [disambiguation.md](references/disambiguation.md).
-- **Configure** — add a `## Required Telegram bot skills` block to the project's `CLAUDE.md` or `AGENTS.md`. Follow [project-config.md](references/project-config.md).
+- **Orchestrate** — load the primary skill plus all applicable secondary skills at the start of any bot task.
+- **Disambiguate** — when two skills seem to overlap, show the boundary. See [disambiguation.md](references/disambiguation.md).
+- **Configure** — write a `## Telegram bot rules` block into the project's `CLAUDE.md`/`AGENTS.md`. Follow [project-config.md](references/project-config.md).
+
+## Two tiers
+
+- **General grammY core** — framework knowledge, works for any bot. Default to these.
+- **agnt-gm platform tier** — correct but *platform-specific* (the agnt-gm bounty pipeline): `agnt-cli-builder`, `telegram-test-specs`, `telegram-test-advanced`, `agntdev-deploy`. Load these **only** when the user is working on that platform (mentions agnt/agntdev/TON/claim/BotSpec/harness). For generic bots, use the general core.
 
 ## Skill loading
 
-For each task, load the **primary skill** and all applicable **secondary skills** at the same time. Do not wait — load them together at the start.
-
 | Intent | Primary | Also load |
 | --- | --- | --- |
-| Find paid work / claim a task / ship PR | [agnt-cli-builder](../agnt-cli-builder/SKILL.md) | Skill for the task type (basics, ui, sessions, tests, deploy) |
-| New bot / entry point / commands / callbacks | [telegram-bot-basics](../telegram-bot-basics/SKILL.md) | [telegram-test-specs](../telegram-test-specs/SKILL.md) if adding commands |
-| Multi-step dialog / user state / booking flow | [telegram-bot-sessions](../telegram-bot-sessions/SKILL.md) | [telegram-bot-ui](../telegram-bot-ui/SKILL.md) if menus/buttons drive the flow |
-| Inline buttons / menus / pagination / confirm | [telegram-bot-ui](../telegram-bot-ui/SKILL.md) | [telegram-bot-basics](../telegram-bot-basics/SKILL.md) for callback routing |
-| Write dialog tests / BotSpec JSON / coverage | [telegram-test-specs](../telegram-test-specs/SKILL.md) | [telegram-bot-basics](../telegram-bot-basics/SKILL.md) (`makeBot()` contract) |
-| Mock DB/HTTP / API failures / payment tests | [telegram-test-advanced](../telegram-test-advanced/SKILL.md) | [telegram-test-specs](../telegram-test-specs/SKILL.md) |
-| Deploy / container crash / dist/index.js / Redis | [telegram-bot-deploy](../telegram-bot-deploy/SKILL.md) | [telegram-bot-sessions](../telegram-bot-sessions/SKILL.md) if session storage |
-| Review bot PR / audit patterns | [telegram-bot-basics](../telegram-bot-basics/SKILL.md) | [telegram-test-specs](../telegram-test-specs/SKILL.md), domain skill for changed area |
+| New bot / entry point / commands / routing / middleware | [telegram-bot-basics](../telegram-bot-basics/SKILL.md) | testing if adding behavior |
+| Buttons / inline & reply keyboards / menus / pagination | [telegram-bot-ui](../telegram-bot-ui/SKILL.md) | basics for callback routing |
+| Persist per-user/chat state | [telegram-bot-sessions](../telegram-bot-sessions/SKILL.md) | scaling if multi-instance |
+| Multi-step dialog / wizard / ask-and-wait | [telegram-bot-conversations](../telegram-bot-conversations/SKILL.md) | ui if buttons drive steps |
+| Formatting / media / edit / delete / file downloads | [telegram-bot-messages](../telegram-bot-messages/SKILL.md) | — |
+| Concurrency / rate limits / 429 / spam | [telegram-bot-scaling](../telegram-bot-scaling/SKILL.md) | sessions (sequentialize key) |
+| Go to production / webhook vs polling / hosting | [telegram-bot-deploy](../telegram-bot-deploy/SKILL.md) | security (webhook secret), sessions (Redis) |
+| Charge money / Stars / invoices | [telegram-bot-payments](../telegram-bot-payments/SKILL.md) | — |
+| Mini App / Web App / initData / inline mode | [telegram-bot-mini-apps](../telegram-bot-mini-apps/SKILL.md) | security (validate initData) |
+| Write tests (generic) | [telegram-bot-testing](../telegram-bot-testing/SKILL.md) | the domain skill under test |
+| Harden / authz / token / input validation | [telegram-bot-security](../telegram-bot-security/SKILL.md) | deploy (webhook secret) |
+| **agnt-gm:** find/claim paid task, ship PR | [agnt-cli-builder](../agnt-cli-builder/SKILL.md) | the general skill for the task type |
+| **agnt-gm:** BotSpec specs / coverage gate | [telegram-test-specs](../telegram-test-specs/SKILL.md) | telegram-bot-testing (the general layer) |
+| **agnt-gm:** mocks / error-path / payment tests | [telegram-test-advanced](../telegram-test-advanced/SKILL.md) | telegram-test-specs |
+| **agnt-gm:** platform deploy / dist/index.js / Redis contract | [agntdev-deploy](../agntdev-deploy/SKILL.md) | telegram-bot-deploy (generic concepts) |
 
 ## Cold-start decision tree
 
 ```
-User mentions agntdev / TON / claim / paid task?
-  YES → agnt-cli-builder first, then domain skill for the task
-  NO  ↓
+On the agnt-gm platform? (agnt / agntdev / TON / claim / BotSpec / harness)
+  YES → agnt-cli-builder first; then the general skill for the task; agntdev-deploy / test-specs for those areas
+  NO  ↓ (generic grammY bot — use the general core)
 
-Changing handlers, routing, makeBot(), project layout?
-  YES → telegram-bot-basics (+ test-specs if commands added)
-
-Building keyboards, pagination, confirm dialogs?
-  YES → telegram-bot-ui (+ sessions if flow has steps)
-
-Persisting user state across messages?
-  YES → telegram-bot-sessions (+ ui if buttons advance steps)
-
-Writing or fixing tests?
-  YES → test-specs (declarative JSON)
-        test-advanced if mocks, 429, blocked user, payments
-
-Bot won't start / deploy / Redis / .npmrc?
-  YES → telegram-bot-deploy
+Handlers, routing, entry point, project layout?   → telegram-bot-basics
+Buttons / keyboards / menus / pagination?          → telegram-bot-ui (+ basics for callbacks)
+Multi-step ask→wait→branch dialog?                 → telegram-bot-conversations
+Persisting state across messages?                  → telegram-bot-sessions
+Formatting / media / edit / download?              → telegram-bot-messages
+Concurrency / rate limit / 429 / spam?             → telegram-bot-scaling
+Webhook vs polling / hosting / serverless?         → telegram-bot-deploy
+Invoices / Telegram Stars?                          → telegram-bot-payments
+Mini App / Web App / initData / inline mode?       → telegram-bot-mini-apps
+Tests (no real token)?                              → telegram-bot-testing
+Token / authz / input validation / abuse?          → telegram-bot-security
 ```
 
 ## Categories at a glance
 
-Full catalog with "use when" hooks: [by-category.md](references/by-category.md)
+Full catalog with "use when" hooks: [by-category.md](references/by-category.md).
 
 | Category | Skills |
 | --- | --- |
-| Pipeline | `agnt-cli-builder` |
-| Core bot | `telegram-bot-basics` |
-| State & flows | `telegram-bot-sessions` |
-| UI | `telegram-bot-ui` |
-| Testing | `telegram-test-specs` `telegram-test-advanced` |
-| Production | `telegram-bot-deploy` |
+| Core | `telegram-bot-basics` |
+| UI & messages | `telegram-bot-ui` `telegram-bot-messages` |
+| State & flows | `telegram-bot-sessions` `telegram-bot-conversations` |
+| Production | `telegram-bot-deploy` `telegram-bot-scaling` `telegram-bot-security` |
+| Advanced | `telegram-bot-payments` `telegram-bot-mini-apps` |
+| Testing | `telegram-bot-testing` |
+| agnt-gm tier | `agnt-cli-builder` `telegram-test-specs` `telegram-test-advanced` `agntdev-deploy` |
 
 ## Competing clusters — boundary lines
 
-Full boundary tables with routing examples: [disambiguation.md](references/disambiguation.md)
+Full tables with routing examples: [disambiguation.md](references/disambiguation.md). Key clusters:
 
-Key clusters:
-
-- **State**: `telegram-bot-sessions` (per-chat `ctx.session`) · manual DB/Map (avoid unless skill says otherwise) · grammY conversations plugin (not in toolkit MVP — use sessions skill)
-- **UI**: `telegram-bot-ui` (keyboards, builders) · `telegram-bot-basics` (raw `callbackQuery` routing)
-- **Tests**: `telegram-test-specs` (BotSpec JSON, coverage gate) · `telegram-test-advanced` (mocks, error paths, `handleUpdate`)
-- **Toolkit layers**: Bot API concept → grammY → `@agntdev/bot-toolkit` — every domain skill follows this order; load basics if the agent skips a layer
+- **State**: `telegram-bot-sessions` (long-lived per-key state) vs `telegram-bot-conversations` (linear ask→wait flows). 1–2 steps → session `step`; longer → conversations.
+- **UI**: `telegram-bot-ui` (build keyboards, menus) vs `telegram-bot-basics` (register & answer `callbackQuery`).
+- **Testing**: `telegram-bot-testing` (generic transformer + `handleUpdate`) vs `telegram-test-specs` (agnt-gm BotSpec/coverage gate).
+- **Deploy**: `telegram-bot-deploy` (generic webhook/polling/hosting) vs `agntdev-deploy` (agnt-gm container contract).
 
 ## Universal rules (every bot task)
 
-These apply regardless of which skill loads:
+Apply regardless of which skill loads (full set: [../../RULES.md](../../RULES.md)):
 
-1. **`makeBot()` returns a fresh bot** — no module-level singleton; harness needs isolation.
-2. **`await ctx.answerCallbackQuery()`** in every callback handler — or the spinner never stops.
-3. **`await` all API calls** — `ctx.reply`, `editMessageText`, etc.
-4. **Never commit `BOT_TOKEN`** — use `process.env.BOT_TOKEN`.
-5. **Tests gate publish** — all BotSpec specs pass + declared command coverage (agntdev pipeline).
-6. **Canonical entry** — `dist/index.js` from `src/index.ts`; see deploy skill for legacy fallbacks.
+1. **`await` every API call** — `ctx.reply`, `editMessageText`, `bot.api.*`.
+2. **`answerCallbackQuery()` in every callback handler** — or the client spins.
+3. **Never commit `BOT_TOKEN`** — read `process.env.BOT_TOKEN`; keep it off logs and replies.
+4. **One consumer per token** — no two pollers, no poller + webhook (`409 Conflict`).
+5. **Install `bot.catch`** — one unhandled throw stops the bot.
+6. **Split build from run** — a factory returns the wired bot; `bot.start()` lives in the entry file.
+7. **Validate untrusted input** — `callback_data`, deep-link payloads, and Mini App `initData` are attacker-controlled.
 
 ## Configure mode
 
-Force-trigger specific skills in a project's `CLAUDE.md` or `AGENTS.md` so they always load.
-
-When invoked as `/telegram-how-to configure`, follow [project-config.md](references/project-config.md).
+When invoked as `/telegram-how-to configure`, write the project rules block per [project-config.md](references/project-config.md).
 
 ---
 
-This skill routes to the domain skills in this bundle. Read the linked `SKILL.md` files for implementation detail — do not improvise patterns that contradict them.
+Read the linked `SKILL.md` files for implementation detail — do not improvise patterns that contradict them.

@@ -1,87 +1,78 @@
 # Competing clusters — Telegram bot skills
 
-Boundary tables for when two skills (or patterns) look alike. Route to the **owner** skill; use the other as secondary only when the table says so.
+Boundary tables for when two skills look alike. Route to the **owner** skill; use the other as secondary only when the table says so.
 
 ---
 
-## 1. Session state cluster
+## 1. State: sessions vs conversations
 
-| Approach | Owner skill | Use when |
+| Need | Owner | Use when |
 | --- | --- | --- |
-| `ctx.session` + grammY `session()` plugin | `telegram-bot-sessions` | Default for agntdev bots; toolkit wires via `createBot()` |
-| Manual `Map<chatId, State>` | — (avoid) | Only for throwaway prototypes; not harness-friendly |
-| SQLite / custom DB per message | `telegram-bot-sessions` | Post-MVP or preview patterns documented in skill |
-| grammY **conversations** plugin | — (not MVP) | Multi-step plugin with its own middleware; not in bot-starter template — prefer sessions skill patterns |
+| Long-lived per-key state (settings, counters, a `step` field) | `telegram-bot-sessions` | state read/written across unrelated updates |
+| Linear ask → wait → branch flow | `telegram-bot-conversations` | a guided sequence with several waits |
+| Manual `Map<chatId, State>` | — (avoid) | throwaway prototypes only — lost on restart, not multi-instance safe |
+
+**Rule of thumb:** 1–2 steps → a session `step` field is lighter. 3+ steps or loops/branches → conversations. Conversations still need the base plugin and `conversation.external()` for side effects.
 
 **Routing examples:**
-
-- "Remember which step the user is on" → `telegram-bot-sessions`.
-- "User sent text outside the expected step" → `telegram-bot-sessions` (guard + reset) + maybe `telegram-bot-ui` (offer menu).
-- "Session lost after container restart" → `telegram-bot-deploy` (Redis) + `telegram-bot-sessions`.
+- "Remember the user's language" → `telegram-bot-sessions`.
+- "Sign-up wizard: name, then email, then confirm" → `telegram-bot-conversations`.
+- "State lost after restart" → `telegram-bot-sessions` (Redis adapter) + `telegram-bot-deploy`.
 
 ---
 
-## 2. UI cluster
+## 2. UI: building keyboards vs routing callbacks
 
 | Topic | Owner | Secondary |
 | --- | --- | --- |
-| Building keyboard JSON / toolkit builders | `telegram-bot-ui` | — |
-| Registering `bot.callbackQuery("prefix:", …)` handlers | `telegram-bot-basics` | `telegram-bot-ui` for payload format |
-| Pagination / confirm / menu layout | `telegram-bot-ui` | `telegram-bot-sessions` if page state in session |
-| `editMessageText` vs new message | `telegram-bot-ui` | — |
+| Build `InlineKeyboard`/`Keyboard`, menus, pagination layout | `telegram-bot-ui` | — |
+| Register `bot.callbackQuery(...)` & `answerCallbackQuery` | `telegram-bot-basics` | `telegram-bot-ui` for `callback_data` format |
+| `editMessageText` vs sending a new message | `telegram-bot-ui` | `telegram-bot-messages` for formatting |
+| Page state | `telegram-bot-ui` | `telegram-bot-sessions` if persisted |
 
-**Routing examples:**
-
-- "Add Yes/No buttons under the booking summary" → `telegram-bot-ui` (`confirmKeyboard`).
-- "Callback spinner never stops" → `telegram-bot-basics` (`answerCallbackQuery`) — not a UI-builder issue.
-- "Inline vs reply keyboard?" → `telegram-bot-ui` (inline = callbacks on message; reply = sends text).
+- "Spinner never stops" → `telegram-bot-basics`/`telegram-bot-ui` (`answerCallbackQuery`), not a builder issue.
+- "Inline vs reply keyboard?" → `telegram-bot-ui` (inline → `callback_query`; reply → text messages).
 
 ---
 
-## 3. Testing cluster
+## 3. Testing: generic vs the agnt-gm harness
 
 | Topic | Owner | Secondary |
 | --- | --- | --- |
-| BotSpec JSON, coverage, harness gate | `telegram-test-specs` | `telegram-bot-basics` for `makeBot()` |
-| Mock fetch/DB, 429, blocked user, payments | `telegram-test-advanced` | `telegram-test-specs` for happy-path specs |
-| "Do I need a real bot token?" | `telegram-test-specs` | No — tokenless harness |
+| Transformer capture + `handleUpdate` (any project) | `telegram-bot-testing` | the domain skill under test |
+| BotSpec JSON, coverage gate, harness CLI (agnt-gm) | `telegram-test-specs` | `telegram-bot-testing` for the underlying technique |
+| Mock DB/HTTP, 429/blocked-user, payments (agnt-gm) | `telegram-test-advanced` | `telegram-test-specs` |
 
-**Routing examples:**
-
-- "Add test for /start" → `telegram-test-specs` only.
-- "Test that API 429 shows retry message" → `telegram-test-advanced` + keep existing specs green.
-- "Harness says command not covered" → `telegram-test-specs` (`commands.json` + spec file).
+Both layers use the same core idea (intercept outgoing API calls, feed synthetic updates); `telegram-bot-testing` is the framework-agnostic version, the `telegram-test-*` skills add the platform's spec format and gate.
 
 ---
 
-## 4. Basics vs deploy
+## 4. Deploy: generic vs agnt-gm platform
 
 | Symptom | Owner | Secondary |
 | --- | --- | --- |
-| Wrong handler logic, bad routing | `telegram-bot-basics` | — |
-| `no bot entry point found` | `telegram-bot-deploy` | `telegram-bot-basics` |
-| Build passes locally, container crash loop | `telegram-bot-deploy` | `telegram-bot-sessions` if Redis/session |
-| Missing `@agntdev/bot-toolkit` in Docker build | `telegram-bot-deploy` | — |
+| Webhook vs polling, hosting, serverless, graceful shutdown | `telegram-bot-deploy` | `telegram-bot-security` (webhook secret) |
+| `409 Conflict` (two consumers) | `telegram-bot-deploy` | — |
+| `dist/index.js` entry, `.npmrc`, `REDIS_URL`, container crash on agnt-gm | `agntdev-deploy` | `telegram-bot-deploy` for the generic concept |
+| Scaling out to many instances | `telegram-bot-scaling` | `telegram-bot-deploy` (webhooks), `telegram-bot-sessions` (shared store) |
 
 ---
 
-## 5. Pipeline vs implementation
+## 5. Basics vs deploy
+
+| Symptom | Owner |
+| --- | --- |
+| Wrong handler logic / routing order | `telegram-bot-basics` |
+| Builds locally, crashes in prod | `telegram-bot-deploy` (or `agntdev-deploy` on platform) |
+| No error boundary, bot dies on a throw | `telegram-bot-basics` (`bot.catch`) |
+
+---
+
+## 6. Pipeline vs implementation (agnt-gm only)
 
 | Topic | Owner | Secondary |
 | --- | --- | --- |
-| `agnt ready`, claim, PR, payouts | `agnt-cli-builder` | Domain skill for the task code |
-| How to implement the feature | Domain skill | `agnt-cli-builder` only at session start |
+| `agnt ready`, claim, PR, payouts | `agnt-cli-builder` | the general skill for the code |
+| How to implement the feature | the general skill | `agnt-cli-builder` at session start only |
 
-**Rule:** `agnt-cli-builder` On Activation runs CLI commands — load it when the user is a **builder on agntdev**, not for generic grammY bots outside the pipeline.
-
----
-
-## 6. Three-layer teaching (all domain skills)
-
-Every `telegram-bot-*` skill teaches in order:
-
-1. **Bot API** — raw HTTP / JSON shapes
-2. **grammY** — `ctx`, plugins, routing
-3. **@agntdev/bot-toolkit** — `createBot`, harness-ready defaults
-
-If the agent jumps straight to toolkit helpers without understanding grammY routing, load `telegram-bot-basics` as secondary even when the primary is `telegram-bot-ui` or `telegram-bot-sessions`.
+**Rule:** load the agnt-gm tier only when the user is a builder on that platform. For generic grammY bots, stay in the general core.
