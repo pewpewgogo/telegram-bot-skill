@@ -1,314 +1,126 @@
 ---
 name: telegram-bot-ui
 description: >
-  Use when building bot UIs — keyboards, buttons, menus, pagination, dialogs.
-  Covers InlineKeyboardMarkup (Bot API), ReplyKeyboardMarkup, callback_data patterns,
-  grammY reply_markup usage, and @agntdev/bot-toolkit UI builders.
-  Triggers: inline buttons, keyboard, telegram menu, bot UI, callback buttons, pagination.
-compatibility: Works with grammY alone, or @agntdev/bot-toolkit builders.
+  Use when building Telegram bot UI with grammY — inline keyboards (callback
+  buttons), reply keyboards, url/webApp/switchInline buttons, callback-query
+  routing, the @grammyjs/menu plugin, pagination, and confirm dialogs.
+  Triggers: inline keyboard, reply keyboard, InlineKeyboard, Keyboard, callback
+  button, callback_data, answerCallbackQuery, menu, pagination, confirm dialog,
+  bot.callbackQuery, web app button, edit message.
+compatibility: grammY v1 (`grammy`); menus need `@grammyjs/menu`. Node 18+ or Deno.
 license: MIT
 ---
 
-# telegram-bot-ui Skill
+# telegram-bot-ui
 
-How to build bot UIs — from raw Bot API keyboard JSON to grammY to toolkit builders.
+Buttons, keyboards, and how to route the presses. Routing/`ctx` basics →
+[telegram-bot-basics](../telegram-bot-basics/SKILL.md).
 
-> **Built for the agntdev pipeline.** See
-> [agnt-cli-builder](../agnt-cli-builder/SKILL.md) for the discovery-and-claim
-> loop. This skill teaches the inline-button, menu, paginate, and
-> confirmKeyboard patterns you use in your claimed task's implementation.
+## Two keyboard kinds
 
----
+| Kind | Builder | Where it shows | Press produces |
+|---|---|---|---|
+| **Inline** | `InlineKeyboard` | attached under the message | a `callback_query` (or opens URL/web app) |
+| **Reply** | `Keyboard` | replaces the user's keyboard | a normal text message |
 
-## 1. How Telegram Keyboards Work (Bot API)
+```ts
+import { InlineKeyboard, Keyboard } from "grammy";
 
-Telegram has **two keyboard types** — different use cases, different JSON shapes.
+const inline = new InlineKeyboard()
+  .text("Like", "like").text("Share", "share").row() // callback buttons
+  .url("Docs", "https://grammy.dev")                 // opens URL, no callback
+  .webApp("Open app", "https://example.com/app");    // Mini App → telegram-bot-mini-apps
+await ctx.reply("Pick:", { reply_markup: inline });
 
-### InlineKeyboardMarkup
+const reply = new Keyboard()
+  .text("Yes").text("No").row()
+  .requestContact("Share contact")
+  .resized().oneTime();          // shrink height; hide after one press
+await ctx.reply("Confirm?", { reply_markup: reply });
+```
 
-Buttons attached to a **specific message**. Tapping sends a `callback_query` back to your bot (no message to chat). Good for menus, confirmations, pagination.
+Remove a reply keyboard with `{ reply_markup: { remove_keyboard: true } }`.
 
-```json
-// Attached to sendMessage reply_markup field
-{
-  "inline_keyboard": [
-    [
-      { "text": "Yes", "callback_data": "confirm:42:yes" },
-      { "text": "No",  "callback_data": "confirm:42:no" }
-    ],
-    [
-      { "text": "Open Site", "url": "https://example.com" }
-    ]
-  ]
+## Handle inline presses — and always answer
+
+A pressed inline button fires a `callback_query`. **Always `answerCallbackQuery()`** or the
+client shows a spinner for ~30s.
+
+```ts
+bot.callbackQuery("like", async (ctx) => {
+  await ctx.answerCallbackQuery();                       // silent ack
+  await ctx.editMessageText("Liked ❤️");                 // update in place
+});
+bot.callbackQuery("share", (ctx) => ctx.answerCallbackQuery({ text: "Shared!" })); // toast
+// alert dialog: ctx.answerCallbackQuery({ text: "Nope", show_alert: true });
+```
+
+### Namespaced callback data (routing by prefix)
+
+`callback_data` is a string ≤ 64 bytes. Encode an action + arg, route by prefix:
+
+```ts
+new InlineKeyboard().text("Next", `page:${n + 1}`);      // build: `page:2`, `buy:42`
+
+bot.callbackQuery(/^page:(\d+)$/, async (ctx) => {
+  const page = Number(ctx.match[1]);                     // regex capture → ctx.match
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageReplyMarkup({ reply_markup: pageKb(page, last) });
+});
+```
+
+For complex payloads use the [callback-data plugin](https://grammy.dev/plugins/callback-data)
+instead of hand-packing strings.
+
+## Stateful menus — @grammyjs/menu
+
+For multi-button menus that update themselves (toggles, sub-menus), the menu plugin tracks
+state and wires callbacks for you — no manual `callback_data`:
+
+```ts
+import { Menu } from "@grammyjs/menu";
+
+const menu = new Menu("settings")
+  .text("➕", (ctx) => ctx.reply("added")).row()
+  .submenu("Advanced", "settings-adv")
+  .url("Help", "https://grammy.dev");
+
+bot.use(menu);                                  // register BEFORE handlers that send it
+bot.command("settings", (ctx) => ctx.reply("Settings", { reply_markup: menu }));
+```
+
+Dynamic labels: pass a function — `.text((ctx) => label, handler)`. For free-form multi-step
+input (not buttons), use [telegram-bot-conversations](../telegram-bot-conversations/SKILL.md).
+
+## Pagination & confirm (common patterns)
+
+```ts
+function pageKb(n: number, last: number) {          // prev/next in callback_data
+  const kb = new InlineKeyboard();
+  if (n > 0) kb.text("‹ Prev", `page:${n - 1}`);
+  if (n < last) kb.text("Next ›", `page:${n + 1}`);
+  return kb;                                          // on press → editMessageReplyMarkup
 }
+const confirm = new InlineKeyboard().text("✅ Yes", "do:yes").text("❌ No", "do:no");
 ```
-
-Tap "Yes" → bot receives `callback_query` with `data: "confirm:42:yes"`.
-
-### ReplyKeyboardMarkup
-
-**Persistent** buttons that replace the user's keyboard. Tapping sends a regular text message. Good for persistent menus, quick replies.
-
-```json
-{
-  "keyboard": [
-    [{ "text": "📅 Book" }, { "text": "📋 My bookings" }],
-    [{ "text": "❌ Cancel" }]
-  ],
-  "resize_keyboard": true
-}
-```
-
-Tap "📅 Book" → bot receives a message with `text: "📅 Book"`.
-
-### Rule of thumb
-
-| Keyboard | Use for |
-|---|---|
-| Inline | Menus on messages, confirmations, pagination, "Edit this message" flows |
-| Reply | Persistent quick-access buttons, "Send a message" flows |
-
-**Never mix them.** `inline_keyboard` array is NOT `keyboard` array.
-
-### Edit vs send
-
-```http
-# Edit existing message (for inline keyboards — user doesn't see new messages)
-POST /bot<TOKEN>/editMessageText   { chat_id, message_id, text, reply_markup }
-
-# Edit only the keyboard (keep text)
-POST /bot<TOKEN>/editMessageReplyMarkup  { chat_id, message_id, reply_markup }
-
-# Send new message (for reply keyboard flows)
-POST /bot<TOKEN>/sendMessage  { chat_id, text, reply_markup }
-```
-
----
-
-## 2. grammY — Using Keyboards
-
-### Attaching inline keyboard
-
-```ts
-// Inline keyboard — buttons on a message
-await ctx.reply("Choose:", {
-  reply_markup: {
-    inline_keyboard: [
-      [{ text: "Option A", callback_data: "pick:a" }],
-      [{ text: "Option B", callback_data: "pick:b" }],
-    ]
-  }
-});
-```
-
-### Attaching reply keyboard
-
-```ts
-// Reply keyboard — persistent buttons replacing user keyboard
-await ctx.reply("Main menu:", {
-  reply_markup: {
-    keyboard: [
-      [{ text: "📅 Book" }, { text: "📋 My bookings" }],
-    ],
-    resize_keyboard: true,
-  }
-});
-```
-
-### Handling callback data
-
-```ts
-// Exact match
-bot.callbackQuery("pick:a", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  await ctx.editMessageText("You picked A");
-});
-
-// Prefix routing (scalable pattern)
-bot.on("callback_query:data", async (ctx) => {
-  const data = ctx.callbackQuery.data;
-
-  if (data.startsWith("pick:")) {
-    const choice = data.split(":")[1];
-    await ctx.editMessageText(`Picked ${choice}`);
-  }
-
-  await ctx.answerCallbackQuery();
-});
-```
-
-### Edit vs new message in grammY
-
-```ts
-// Edit existing message (smooth UX — no message spam)
-await ctx.editMessageText("Updated text", { reply_markup: newKeyboard });
-
-// Edit just the keyboard, keep text
-await ctx.editMessageReplyMarkup({ reply_markup: newKeyboard });
-
-// Send a new message (keeps history visible)
-await ctx.reply("New message");
-
-// Do nothing but stop spinner
-await ctx.answerCallbackQuery();
-```
-
-### Callback data pattern
-
-Namespaced prefix keeps routing simple:
-
-```
-menu:<action>            — main menu actions
-select:<id>              — item selection
-confirm:<action>:<id>    — confirmation flow
-page:<n>                 — page jump
-pg:prev:<n> / pg:next:<n> — paginate helper
-```
-
----
-
-## 3. @agntdev/bot-toolkit — UI Builders
-
-The toolkit provides **pure builders** that return plain `InlineKeyboardMarkup` objects. No grammY import needed — they produce the exact JSON shapes grammY expects.
-
-```ts
-import { inlineButton, urlButton, inlineKeyboard, menuKeyboard, confirmKeyboard, paginate } from "@agntdev/bot-toolkit";
-```
-
-### inlineButton(text, callbackData)
-
-```ts
-inlineButton("Yes", "confirm:42")
-// → { text: "Yes", callback_data: "confirm:42" }
-// Type: { text: string; callback_data: string }
-```
-
-### urlButton(text, url)
-
-```ts
-urlButton("Docs", "https://agnt-gm.ai")
-// → { text: "Docs", url: "https://agnt-gm.ai" }
-// Type: { text: string; url: string }
-```
-
-### inlineKeyboard(rows)
-
-Wrap rows of buttons into valid `InlineKeyboardMarkup`:
-
-```ts
-const kb = inlineKeyboard([
-  [inlineButton("A", "a"), inlineButton("B", "b")],
-  [urlButton("Docs", "https://x.io")],
-]);
-
-await ctx.reply("Choose:", { reply_markup: kb });
-```
-
-### menuKeyboard(items, columns?)
-
-Grid layout from a flat list. Default 1 column.
-
-```ts
-const items = [
-  { text: "📅 Book", data: "menu:book" },
-  { text: "📋 My bookings", data: "menu:my" },
-  { text: "❌ Cancel", data: "menu:cancel" },
-  { text: "ℹ️ Help", data: "menu:help" },
-];
-
-menuKeyboard(items);     // vertical list, 1 per row
-menuKeyboard(items, 2);  // 2-column grid
-```
-
-### confirmKeyboard(actionPrefix, opts?)
-
-Yes/No row. Callbacks: `<prefix>:yes` / `<prefix>:no`.
-
-```ts
-confirmKeyboard("delete:42");
-// → [✅ Yes ("delete:42:yes")] [❌ No ("delete:42:no")]
-
-confirmKeyboard("publish", { yes: "🚀 Publish", no: "🔙 Back" });
-```
-
-Handler:
-
-```ts
-bot.on("callback_query:data", async (ctx) => {
-  const data = ctx.callbackQuery.data;
-  if (data.startsWith("delete:")) {
-    const [, id, action] = data.split(":");
-    await ctx.editMessageText(action === "yes" ? `Deleted ${id}` : "Cancelled");
-  }
-  await ctx.answerCallbackQuery();
-});
-```
-
-### paginate(items, options)
-
-Slice items into pages with prev/next controls.
-
-```ts
-const result = paginate(allItems, {
-  page: 0,               // 0-based, auto-clamped
-  perPage: 5,
-  callbackPrefix: "pg",   // default: "page"
-  prevLabel: "« Prev",
-  nextLabel: "Next »",
-});
-
-// result.pageItems  — items for current page
-// result.totalPages — how many pages
-// result.page       — actual page number (may be clamped)
-// result.controls   — InlineKeyboardMarkup with prev/next buttons
-```
-
-Single page → empty controls. First page → only Next. Last page → only Prev. Middle → both.
-
-**Full pagination handler:**
-
-```ts
-async function showPage(ctx: BotContext, page: number) {
-  const items = await loadItems();
-  const { pageItems, controls } = paginate(items, { page, perPage: 5 });
-
-  const rows = pageItems.map(item => [
-    inlineButton(item.name, `select:${item.id}`),
-  ]);
-
-  const keyboard = inlineKeyboard([...rows, ...controls.inline_keyboard]);
-  await ctx.editMessageText("Choose an item:", { reply_markup: keyboard });
-}
-
-bot.on("callback_query:data", async (ctx) => {
-  const data = ctx.callbackQuery.data;
-  if (data.startsWith("pg:next:")) await showPage(ctx, parseInt(data.split(":")[2]));
-  if (data.startsWith("pg:prev:")) await showPage(ctx, parseInt(data.split(":")[2]));
-  await ctx.answerCallbackQuery();
-});
-```
-
-**Callback format:** `<prefix>:prev:<n>` / `<prefix>:next:<n>` where `n` = target page index.
-
----
-
-## 4. Toolkit vs Pure grammY
-
-| Task | Pure grammY | Toolkit |
-|---|---|---|
-| Inline button | `{ text: "Hi", callback_data: "x" }` | `inlineButton("Hi", "x")` |
-| URL button | `{ text: "Link", url: "..." }` | `urlButton("Link", "...")` |
-| Grid menu | Manual row chunking | `menuKeyboard(items, cols)` |
-| Confirm row | Manual 2-button row | `confirmKeyboard("prefix")` |
-| Paginate | Manual slice + prev/next logic | `paginate(items, opts)` |
-
-Toolkit builders produce the **same JSON shapes** grammY expects. They're convenience, not lock-in. Use them when you want less boilerplate. Skip them when you need full control.
-
----
 
 ## Common mistakes
 
-1. **`inline_keyboard` in `keyboard` field** — different objects. Inline keyboards go under `reply_markup.inline_keyboard`. Reply keyboards under `reply_markup.keyboard`.
-2. **`paginate()` without handler** — buttons generate `pg:prev:X` / `pg:next:X` data. Must route them in callback handler.
-3. **Not catching unknown callbacks** — always have fallback `answerCallbackQuery` for stray callback data.
-4. **Using `editMessageText` on a new message** — you need `message_id` from a previous reply. `ctx.reply()` for first message, `ctx.editMessageText()` for updates.
+1. **Missing `answerCallbackQuery()`** — every `callback_query` handler must call it (spinner otherwise). Pass `text`/`show_alert` for feedback.
+2. **`callback_data` > 64 bytes** — Telegram rejects it. Keep payloads short; store big state in [sessions](../telegram-bot-sessions/SKILL.md).
+3. **Inline vs reply confusion** — inline → `callback_query`; reply → plain text messages you match with `bot.hears`.
+4. **Editing with no change** — `editMessageText` with identical text/markup throws `message is not modified`. Guard it or change the content.
+5. **Menu registered after the sender** — `bot.use(menu)` must come before the handler that replies with it, or its buttons are dead.
+6. **Re-sending instead of editing** — for pagination/toggles use `editMessageText`/`editMessageReplyMarkup`, not a new message.
+
+## Quick reference
+
+```ts
+new InlineKeyboard().text(label, data).url(l, u).webApp(l, u).switchInline(l).row()
+new Keyboard().text(l).requestContact(l).requestLocation(l).resized().oneTime().persistent()
+{ reply_markup: kb }                         // attach · { remove_keyboard: true } to clear
+bot.callbackQuery("data" | /re/, fn)         // ctx.match = capture
+ctx.answerCallbackQuery({ text?, show_alert? })
+ctx.editMessageText(text, { reply_markup }) · ctx.editMessageReplyMarkup({ reply_markup })
+new Menu(id).text(l, fn).submenu(l, id).row() // @grammyjs/menu — bot.use(menu) first
+```

@@ -1,288 +1,150 @@
 ---
 name: telegram-bot-basics
 description: >
-  Use when building a Telegram bot. Covers how Telegram Bot API works (HTTP),
-  how grammY wraps it, and how @agntdev/bot-toolkit adds harness compatibility.
-  Triggers: build telegram bot, create telegram bot, grammY bot, bot entry point.
-compatibility: Works with grammY alone, or @agntdev/bot-toolkit for testable bots.
+  Use when starting or structuring a Telegram bot with grammY (TypeScript/JS) —
+  entry point, command and message routing, the context object, middleware, and the
+  global error boundary. The foundation every other telegram-bot-* skill builds on.
+  Triggers: build telegram bot, create telegram bot, grammY bot, bot entry point,
+  bot.command, bot.on, filter query, ctx.reply, middleware, bot.catch, long polling,
+  setMyCommands, new Bot.
+compatibility: grammY v1 (npm `grammy`), Node 18+ or Deno. Framework-agnostic.
 license: MIT
 ---
 
-# telegram-bot-basics Skill
+# telegram-bot-basics
 
-How to build a Telegram bot — from raw Bot API to grammY to the agntdev toolkit.
+How a bot receives updates, how grammY routes them, and how to structure the entry point.
 
-> **Built for the agntdev pipeline.** Use the [agnt-cli-builder](../agnt-cli-builder/SKILL.md)
-> skill for the discovery-and-claim loop (`agnt ready` → `agnt dag show` →
-> `agnt task claim` → ship the PR). This skill teaches the bot-building
-> patterns you apply once you've claimed a task.
+> Keyboards/callbacks → [telegram-bot-ui](../telegram-bot-ui/SKILL.md) ·
+> per-user state → [telegram-bot-sessions](../telegram-bot-sessions/SKILL.md) ·
+> dialogs → [telegram-bot-conversations](../telegram-bot-conversations/SKILL.md) ·
+> production → [telegram-bot-deploy](../telegram-bot-deploy/SKILL.md).
 
----
+## Mental model
 
-## 1. How Telegram Bot API Works
+A bot is an **HTTP client** of `api.telegram.org/bot<TOKEN>/<METHOD>`. Telegram keeps no
+per-user state: each event is an `Update` you receive, each action is one API call. Two
+receive modes (chosen at deploy, not in handlers — routing code is identical):
 
-Telegram bots are **HTTP clients** that talk to `https://api.telegram.org/bot<TOKEN>/<METHOD>`.
-
-### Polling vs Webhook
-
-| Mode | How | When |
+| Mode | grammY | Use when |
 |---|---|---|
-| **Long polling** | Bot calls `getUpdates` in a loop. Telegram holds the connection open until new messages arrive (or timeout). | Dev, simple bots, no public URL |
-| **Webhook** | You give Telegram a URL. Telegram POSTs JSON `Update` objects to your server in real time. | Production, needs HTTPS |
+| **Long polling** | `bot.start()` | dev, single instance, no public URL (default) |
+| **Webhook** | `webhookCallback()` | serverless, autoscale → [telegram-bot-deploy](../telegram-bot-deploy/SKILL.md) |
 
-```http
-# Long poll — bot asks "any messages for me?"
-GET https://api.telegram.org/bot123:ABC/getUpdates?timeout=30&offset=0
+Only **one consumer per token** — a second poller (or poller + webhook) gets `409 Conflict`.
 
-# Response: array of Update objects
-{
-  "ok": true,
-  "result": [
-    {
-      "update_id": 100,
-      "message": {
-        "message_id": 1,
-        "chat": { "id": 42, "type": "private" },
-        "from": { "id": 99, "first_name": "User" },
-        "text": "/start",
-        "entities": [{ "type": "bot_command", "offset": 0, "length": 6 }]
-      }
-    }
-  ]
-}
-```
-
-### Update → Action → API call
-
-```
-User sends /start to @MyBot
-  → Telegram adds Update to queue
-  → Bot fetches Update (poll) or receives POST (webhook)
-  → Bot parses message.text, sees /start command
-  → Bot calls sendMessage API to reply
-```
-
-Every bot action is an HTTP call: `sendMessage`, `editMessageText`, `answerCallbackQuery`, `sendPhoto`, etc.
-
-### Token Security
-
-Bot token = full control. Never commit to git. Never bake into source. Inject via env var `process.env.BOT_TOKEN`.
-
----
-
-## 2. grammY — the Framework
-
-grammY wraps the raw HTTP API into an idiomatic TypeScript bot framework.
-
-### Bot instance
+## Bot instance
 
 ```ts
 import { Bot } from "grammy";
 
-const bot = new Bot(process.env.BOT_TOKEN!);
-
-bot.command("start", async (ctx) => {
-  await ctx.reply("Hello!");
-});
-
-bot.start();  // starts long polling (dev)
-// bot.start({ onStart: ... }) with webhook config for production
+const bot = new Bot(process.env.BOT_TOKEN!); // from @BotFather; never hardcode
+bot.command("start", (ctx) => ctx.reply("Hello!"));
+bot.start();
 ```
 
-### Context object (`ctx`)
+## Context (`ctx`)
 
-Every handler receives `ctx` — the full Update + convenience methods:
+One arg per handler — the `Update` plus chat-bound shortcuts:
 
 ```ts
-ctx.message       // the incoming Message object
-ctx.from          // User who sent it
-ctx.chat          // Chat where it came from
-ctx.reply(text)   // shortcut for sendMessage to the same chat
-ctx.api.sendMessage(chatId, text)  // raw API access
+ctx.msg        // the message for ANY update type (use over ctx.message)
+ctx.from       // User · ctx.chat / ctx.chatId — Chat
+ctx.match      // capture from command arg / hears regex / callbackQuery regex
+await ctx.reply("text");                      // respond in this chat
+await ctx.api.sendMessage(otherChatId, "hi"); // raw API to any chat / any method
 ```
 
-### Command routing
+## Routing
 
 ```ts
-bot.command("start", async (ctx) => ctx.reply("Hi!"));
-bot.command("help",  async (ctx) => ctx.reply("Help text"));
-
-// Commands are case-sensitive: /Book ≠ /book
-// @botusername suffix auto-handled: /start@MyBot → /start
+bot.command("start", (ctx) => ctx.reply("hi"));      // /start (+ /start@Bot auto-handled)
+bot.command(["help", "h"], (ctx) => ctx.reply("…")); // aliases
+bot.command("echo", (ctx) => ctx.reply(ctx.match));  // "/echo x" → ctx.match === "x"
+bot.hears(/^buy (\d+)/, (ctx) => ctx.reply(ctx.match[1])); // text/caption; regex → ctx.match
+bot.on("message:text", (ctx) => ctx.reply(ctx.msg.text));  // filter query (narrows ctx)
+bot.on("message:photo", (ctx) => ctx.reply("nice"));
+bot.callbackQuery("data", (ctx) => ctx.answerCallbackQuery()); // inline button → telegram-bot-ui
 ```
 
-grammY checks `message.entities` for `bot_command` type — that's how it knows `/start` is a command vs plain text.
+**Filter queries** are typed `update:sub:detail` strings (`message:entities:url`,
+`edited_message`, …); editor autocompletes them and `ctx` narrows inside the handler.
+Handlers run **top-to-bottom** — register specific (commands) before catch-alls (`bot.on("message")`).
 
-### Callback query handling
+## Middleware
 
 ```ts
-// Exact match on callback_data
-bot.callbackQuery("menu:next", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  await ctx.editMessageText("Page 2");
-});
-
-// Prefix-based routing for namespaced data
-bot.on("callback_query:data", async (ctx) => {
-  const data = ctx.callbackQuery.data;
-  if (data.startsWith("page:")) {
-    // handle pagination
-  }
-  await ctx.answerCallbackQuery();
-});
+bot.use(async (ctx, next) => { console.log(ctx.update.update_id); await next(); }); // log + continue
+bot.use(async (ctx, next) => { if (ctx.from?.id !== ADMIN) return; await next(); }); // guard: no next() = stop
 ```
 
-**Always call `answerCallbackQuery()`** — Telegram shows loading spinner until you do:
+Group features with `Composer` and mount in order — keeps `index.ts` small:
 
 ```ts
-await ctx.answerCallbackQuery();                           // silent
-await ctx.answerCallbackQuery({ text: "Done!" });          // toast popup
-await ctx.answerCallbackQuery({ text: "Err", show_alert: true }); // alert dialog
+import { Composer } from "grammy";
+export const admin = new Composer();
+admin.command("ban", (ctx) => {/* … */});
+// index.ts: bot.use(admin);
 ```
 
-### Middleware
+## Error boundary
 
-grammY runs handlers through a middleware pipeline. `bot.use()` adds middleware:
+An unhandled throw stops the bot. Always install:
 
 ```ts
-// Log every message
-bot.use(async (ctx, next) => {
-  console.log("got:", ctx.message?.text);
-  await next();  // pass to next handler
-});
-
-// Guard admin-only commands
-bot.use(async (ctx, next) => {
-  if (ctx.from?.id !== ADMIN_ID) {
-    await ctx.reply("Not authorized");
-    return;  // stop chain
-  }
-  await next();
+import { GrammyError, HttpError } from "grammy";
+bot.catch(({ ctx, error }) => {
+  if (error instanceof GrammyError) console.error("API:", error.description); // Telegram rejected (.error_code)
+  else if (error instanceof HttpError) console.error("network:", error);      // never reached Telegram
+  else console.error(error);
 });
 ```
 
-### Error boundary
+Recover within a sub-tree with `bot.errorBoundary(handler, ...mw)`. 429/retry strategy →
+[telegram-bot-scaling](../telegram-bot-scaling/SKILL.md).
+
+## Structure & custom context
+
+Split **build** from **run** so tests and webhook deploys can import a wired bot without polling:
 
 ```ts
-bot.catch((err) => {
-  console.error("bot error:", err);
-});
-```
-
-Without `.catch()`, unhandled errors crash the polling loop.
-
----
-
-## 3. @agntdev/bot-toolkit — The Wrapper
-
-The toolkit wraps grammY with **opinionated defaults** that make bots testable via the tokenless harness.
-
-### createBot() vs new Bot()
-
-```ts
-// Pure grammY:
-const bot = new Bot(token);
-bot.use(session({ initial: () => ({}) }));
-bot.catch(console.error);
-
-// Toolkit (same thing, one call):
-import { createBot, type BotContext } from "@agntdev/bot-toolkit";
-
-interface Session {
-  step: string;
+// src/bot.ts
+import { Bot, Context, SessionFlavor } from "grammy";
+export type MyContext = Context & SessionFlavor<{ count: number }>; // plugins extend ctx via flavors
+export function buildBot(token: string) {
+  const bot = new Bot<MyContext>(token);
+  bot.catch((err) => console.error(err));
+  bot.use(/* composers */);
+  return bot;                       // NO bot.start() here
 }
-
-const bot = createBot<Session>(token, {
-  initial: () => ({ step: "idle" }),
-  // storage: ...      // omit = MemorySessionStorage (dev)
-  // onError: (err) => { ... }  // omit = console.error
-});
-```
-
-What `createBot` wires automatically:
-- grammY `Bot` instance
-- Session middleware (`session()` plugin) with your typed `initial()` + `storage`
-- Error boundary (`bot.catch()`)
-
-**Result:** same grammY `bot` object you know — all `bot.command()`, `bot.on()`, `ctx.reply()` work identically. Only difference: sessions wired, errors caught, harness-ready.
-
-### BotContext type
-
-```ts
-import type { BotContext } from "@agntdev/bot-toolkit";
-
-// BotContext<S> = grammY Context & SessionFlavor<S>
-bot.command("count", async (ctx: BotContext<Session>) => {
-  ctx.session.count = (ctx.session.count ?? 0) + 1;  // typed access
-  await ctx.reply(`Count: ${ctx.session.count}`);
-});
-```
-
-### makeBot() factory pattern
-
-**Why a factory?** The test harness needs a FRESH bot per spec run. A singleton bot (`const bot = createBot(...)` at module level) leaks state between tests.
-
-```ts
 // src/index.ts
-import { createBot } from "@agntdev/bot-toolkit";
-
-export function makeBot() {
-  const bot = createBot<Session>(process.env.BOT_TOKEN!, {
-    initial: () => ({ step: "idle" }),
-  });
-
-  bot.command("start", startHandler);
-  bot.callbackQuery("menu:next", nextHandler);
-
-  return bot;
-}
-
-// Standalone run (not under harness):
-if (require.main === module) {
-  makeBot().start();
-}
+buildBot(process.env.BOT_TOKEN!).start();
 ```
 
-**Rule:** `makeBot()` must return a NEW bot every call. Do NOT cache it.
-
-### Project structure
-
 ```
-my-bot/
-├── src/
-│   ├── index.ts          # makeBot() factory — THE mandatory export
-│   ├── commands/         # one file per command handler
-│   │   └── start.ts
-│   └── flows/            # multi-step dialog flows
-│       └── booking.ts
-├── tests/
-│   └── specs/            # BotSpec JSON files
-│       └── start.json
-├── package.json
-└── tsconfig.json
+src/  bot.ts (buildBot) · index.ts (run) · commands/*.ts (one Composer each) · types.ts
 ```
 
----
-
-## Quick Reference
-
-| What | grammY | Toolkit |
-|---|---|---|
-| Create bot | `new Bot(token)` | `createBot(token, opts)` |
-| Command handler | `bot.command("x", fn)` | Same |
-| Callback handler | `bot.callbackQuery("d", fn)` | Same |
-| Reply | `ctx.reply(text)` | Same |
-| Session | `bot.use(session({...}))` | Auto-wired via `createBot()` |
-| Error boundary | `bot.catch(fn)` | Auto-wired, `onError` in opts |
-| Factory export | Manual pattern | `makeBot()` → tooling expects this |
-
----
+Register the menu once at startup: `await bot.api.setMyCommands([{ command: "start", description: "Start" }])`.
 
 ## Common mistakes
 
-1. **Singleton bot** — `const bot = createBot(...)` at module level. Harness needs fresh bot per spec. Always wrap in `makeBot()`.
-2. **Missing `answerCallbackQuery()`** — spinner never stops. Always call it at end of callback handler.
-3. **Not awaiting API calls** — `ctx.reply(text)` without `await` means handler finishes before message sends.
-4. **Forgetting `export function makeBot()`** — harness looks for this exact export name.
-5. **Command case mismatch** — grammY commands are case-sensitive. `/Book` ≠ `/book`.
-6. **Token in source code** — use `process.env.BOT_TOKEN`, never hardcode.
+1. **Hardcoded token** — read `process.env.BOT_TOKEN`; a leak = full takeover.
+2. **Un-awaited API calls** — `ctx.reply(...)` without `await` races the handler and swallows errors. Await every `ctx.*`/`bot.api.*`.
+3. **No `bot.catch`** — one throw kills long polling.
+4. **Catch-all before specific** — `bot.on("message")` above `bot.command` eats the command.
+5. **Two pollers on one token** — `409 Conflict`. One consumer per token.
+6. **`ctx.message` for non-messages** — `undefined` on edits/posts/callbacks. Use `ctx.msg`/`ctx.from`/`ctx.chatId`.
+7. **`bot.start()` inside the build fn** — un-testable, un-webhookable. Split build from run.
+
+## Quick reference
+
+```ts
+new Bot<MyContext>(token)
+bot.command("n" | ["a","b"], fn)   // ctx.match = arg string
+bot.hears(/re/, fn)                 // ctx.match = RegExpMatch
+bot.on("message:text", fn)          // filter query — narrows ctx
+bot.callbackQuery("data", fn)       // must answerCallbackQuery → telegram-bot-ui
+bot.use(mw | composer) · bot.catch(fn) · bot.api.setMyCommands([...])
+ctx.reply / ctx.api.sendMessage · bot.start() · webhookCallback(bot, "express")
+```

@@ -2,17 +2,29 @@
 
 ## Project Type
 
-Skill bundle for the agntdev platform. Each `skills/<name>/` directory is
-a self-contained skill consumable by an agent runtime that supports the
-`name` + `description` frontmatter protocol (Claude, Cursor, Pi, etc.).
+A grammY Telegram-bot **skill collection** (modeled on samber/cc-skills-golang).
+Each `skills/<name>/` directory is a self-contained skill consumable by any agent
+runtime that supports the `name` + `description` frontmatter protocol (Claude,
+Cursor, Copilot, etc.). Two tiers: a **general grammY core** and an **agnt-gm
+platform tier**.
 
 ## Structure
 
-- `skills/telegram-how-to/` — orchestrator; routes intent to domain skills
-- `skills/agnt-cli-builder/` — meta-skill, builder's entry point
-- `skills/telegram-bot-{basics,sessions,ui,test-specs,test-advanced,deploy}/` — concept → grammY → toolkit
+- `skills/telegram-how-to/` — orchestrator; routes intent to both tiers; `references/` hold the catalog, disambiguation tables, and the configure template
+- **General core:** `skills/telegram-bot-{basics,ui,sessions,conversations,messages,scaling,deploy,payments,mini-apps,testing,security}/` — pure grammY, no platform lock-in
+- **agnt-gm tier:** `skills/{agnt-cli-builder,telegram-test-specs,telegram-test-advanced,agntdev-deploy}/` — correct but platform-specific
+- `RULES.md` (repo root) — consolidated cross-cutting rule set
 - `references/COMMANDS.md` (under `agnt-cli-builder/`) — auto-generated
   from the agnt-cli repo's oclif manifest. **Do not hand-edit.**
+
+## Authoring conventions (general core)
+
+- **Pure grammY only** — no `@agntdev/*` imports, no `createBot`/`makeBot` toolkit
+  helpers. Platform specifics belong in the agnt-gm tier.
+- **Verify grammY APIs against grammy.dev** before writing snippets — wrong API
+  names are what make a skill "wrong."
+- Keep each `SKILL.md` to the lean bar set by `telegram-bot-basics`: concept → API →
+  minimal snippet, a `## Common mistakes` block, sibling cross-refs, a quick reference.
 
 ## Regenerating the COMMANDS.md reference
 

@@ -1,261 +1,111 @@
 ---
 name: telegram-bot-sessions
 description: >
-  Use when implementing user session persistence in a Telegram bot.
-  Covers Bot API's stateless nature, grammY session plugin + StorageAdapter,
-  and @agntdev/bot-toolkit MemorySessionStorage + harness isolation.
-  Triggers: session, persistence, bot state, user state, conversation flow.
-compatibility: Works with grammY sessions alone, or @agntdev/bot-toolkit for defaults.
+  Use when a Telegram bot needs per-user or per-chat state that survives across
+  messages — grammY's session plugin, the session key, storage adapters
+  (memory/Redis/file/free), lazy sessions, session-shape design, and migrations.
+  Triggers: session, persist state, user state, ctx.session, SessionFlavor,
+  storage adapter, RedisAdapter, session key, getSessionKey, lazySession,
+  remember user, counter, save state.
+compatibility: grammY v1 (`grammy`); adapters via `@grammyjs/storage-*`. Node 18+ or Deno.
 license: MIT
 ---
 
-# telegram-bot-sessions Skill
+# telegram-bot-sessions
 
-How to persist user state in a Telegram bot — why it's needed, how grammY solves it, how the toolkit wraps it.
+The Bot API is stateless — Telegram remembers nothing about a user between updates. The
+**session plugin** attaches a per-key object (`ctx.session`) that you read/write freely and
+that persists to storage. Context type setup → [telegram-bot-basics](../telegram-bot-basics/SKILL.md).
 
-> **Built for the agntdev pipeline.** See
-> [agnt-cli-builder](../agnt-cli-builder/SKILL.md) for the discovery-and-claim
-> loop. This skill teaches the MemorySessionStorage / SQLite adapter
-> patterns you wire into your claimed task's implementation.
-
----
-
-## 1. Why Sessions Are Needed (Bot API)
-
-Telegram Bot API is **stateless**. Every Update arrives as a fresh HTTP request. The bot has no built-in memory of what a user did before.
-
-```
-User: "I want to book"
-Bot:  "What service?"
-User: "Haircut"
-Bot:  "When?"
-User:  "Tomorrow 2pm"
-Bot:  "Booked!"
-```
-
-Without state, the bot can't know that "Haircut" answers the "What service?" question vs being a random message. It has no memory of the conversation step.
-
-### How Bot API handles it — there is no built-in mechanism
-
-Bot API just delivers Updates. It's up to the bot to:
-1. Remember who is at what step
-2. Store partial data between messages
-3. Clear state when a flow completes
-
-**Option: Database.** Write user state to SQLite/Redis on every message. Works but adds latency + complexity.
-
-**Option: In-memory Map.** Fast but lost on restart. Fine for dev, bad for production.
-
-**Option: grammY sessions.** The framework abstracts this away.
-
----
-
-## 2. grammY Sessions — The Framework Solution
-
-grammY provides a `session()` plugin that stores per-chat state and makes it available as `ctx.session`.
-
-### Basic setup
+## Wire it up
 
 ```ts
-import { Bot, session } from "grammy";
+import { Bot, Context, session, SessionFlavor } from "grammy";
 
-interface SessionData {
-  step: string;
-  service?: string;
-}
-
-const bot = new Bot(token);
-
-bot.use(session({
-  initial: (): SessionData => ({ step: "idle" }),
-  // storage: ...  // defaults to in-memory Map
-}));
-
-bot.command("book", async (ctx) => {
-  ctx.session.step = "choosing_service";
-  await ctx.reply("What service?");
-});
-
-bot.on("message:text", async (ctx) => {
-  if (ctx.session.step === "choosing_service") {
-    ctx.session.service = ctx.message.text;
-    ctx.session.step = "choosing_time";
-    await ctx.reply("What time?");
-  }
-});
-```
-
-### Session key
-
-grammY keys sessions by `chatId_userId` (`"12345_67890"`). This means:
-- **Private chats:** one session per user (chat and user are the same person)
-- **Group chats:** one session shared by all users in the chat
-- Session is per-chat, not per-user globally
-
-### Session flavor — typing ctx.session
-
-```ts
-import { session, type SessionFlavor } from "grammy";
-
+interface SessionData { count: number }
 type MyContext = Context & SessionFlavor<SessionData>;
 
-const bot = new Bot<MyContext>(token);
-bot.use(session({ initial: () => ({ step: "idle" }) }));
+const bot = new Bot<MyContext>(process.env.BOT_TOKEN!);
+bot.use(session({ initial: (): SessionData => ({ count: 0 }) })); // initial() runs per new key
 
-// ctx.session is now typed:
-bot.command("book", async (ctx) => {
-  ctx.session.step = "choosing";  // TypeScript knows this field
+bot.command("inc", async (ctx) => {
+  ctx.session.count++;                      // typed; auto-persists after the handler
+  await ctx.reply(`count: ${ctx.session.count}`);
 });
 ```
 
-### StorageAdapter interface
+`initial` is **required** and must return a *fresh* object each call (never share a reference).
+Default storage is in-memory (lost on restart) — fine for dev, not production.
 
-grammY sessions work with any storage backend that implements:
+## The session key — what "per" means
 
-```ts
-interface StorageAdapter<T> {
-  read(key: string): T | undefined;
-  write(key: string, value: T): void;
-  delete(key: string): void;
-  has(key: string): boolean;
-  readAllKeys(): string[];
-}
-```
-
-Built-in options:
-- **Default** — in-memory `Map` (fast, lost on restart, fine for dev)
-- **SQLite** — durable, survives restarts (add `@grammyjs/storage-sqlite`)
-- **Redis** — fast + durable (add `@grammyjs/storage-redis`)
-- **Firebase, MongoDB, Supabase** — community adapters available
-
----
-
-## 3. @agntdev/bot-toolkit — Session Defaults
-
-### MemorySessionStorage
-
-The toolkit ships `MemorySessionStorage` — a grammY-compatible `StorageAdapter` backed by `Map`.
+`getSessionKey(ctx)` decides scope. Default is **per chat** (`ctx.chat.id`):
 
 ```ts
-import { MemorySessionStorage } from "@agntdev/bot-toolkit";
-
-// Implements StorageAdapter:
-const store = new MemorySessionStorage<SessionData>();
-store.write("123_456", { step: "idle" });
-store.read("123_456");    // { step: "idle" }
-store.has("123_456");     // true
-store.delete("123_456");
-store.readAllKeys();      // []
+session({ initial, getSessionKey: (ctx) => ctx.from?.id.toString() });        // per user (any chat)
+session({ initial, getSessionKey: (ctx) => ctx.from && ctx.chat && `${ctx.chat.id}:${ctx.from.id}` }); // per user per chat
 ```
 
-**You rarely instantiate it directly.** `createBot()` uses it by default:
+If the key is `undefined`, that update has **no session** (e.g. a user-less update under a
+per-user key) — guard before writing.
+
+## Storage adapters (production)
 
 ```ts
-const bot = createBot<Session>(token, {
-  initial: () => ({ step: "idle" }),
-  // storage omitted → MemorySessionStorage used automatically
-});
+import { RedisAdapter } from "@grammyjs/storage-redis";
+import { Redis } from "ioredis";
+const storage = new RedisAdapter({ instance: new Redis(process.env.REDIS_URL!) });
+bot.use(session({ initial, storage }));
 ```
 
-### Session shape design
-
-Keep sessions **flat and serializable** — no functions, no class instances, no circular refs:
-
-```ts
-interface Session {
-  // Dialog state
-  step: string;
-
-  // Flow data (optional until set)
-  serviceId?: string;
-  slotDate?: string;
-  slotTime?: string;
-
-  // Simple counters
-  bookingsCount?: number;
-}
-```
-
-Every session starts from `initial()`:
-
-```ts
-initial: () => ({
-  step: "idle",
-  bookingsCount: 0,
-})
-```
-
-### Harness isolation
-
-The test harness creates a **fresh bot per spec** via `makeBot()`. Each bot gets its own `MemorySessionStorage`:
-
-```
-Spec 1 ("booking flow"):
-  makeBot() → fresh MemorySessionStorage → session starts from initial()
-
-Spec 2 ("cancel flow"):
-  makeBot() → another fresh MemorySessionStorage → session starts from initial()
-```
-
-- No session leaks between specs
-- No cleanup needed between runs
-- Each spec sees exactly the state `initial()` defines
-
-### SQLite in production
-
-For production bots, swap to SQLite (same StorageAdapter interface, same bot code):
-
-```ts
-import { SqliteSessionStorage } from "@agntdev/bot-toolkit/sqlite"; // planned
-
-const bot = createBot<Session>(token, {
-  initial: () => ({ step: "idle" }),
-  storage: new SqliteSessionStorage("./data/sessions.db"),
-});
-```
-
-Until the toolkit ships SQLite adapter, use grammY's `@grammyjs/storage-sqlite` directly — same interface.
-
-### Migration
-
-Adding fields to session:
-
-```ts
-// V1
-interface Session { step: string; }
-
-// V2 — add optional field (safe, no migration needed)
-interface Session {
-  step: string;
-  theme?: "light" | "dark";  // optional — defaults to undefined
-}
-
-// Access with default:
-const theme = ctx.session.theme ?? "light";
-```
-
-- **MemoryStorage:** restarts wipe everything — no migration needed
-- **SQLite:** optional fields safe to add. Required new fields need migration step that fills defaults for existing rows
-
----
-
-## Quick Reference
-
-| What | grammY | Toolkit |
+| Adapter | Package | Use |
 |---|---|---|
-| Activate sessions | `bot.use(session({...}))` | Auto via `createBot()` |
-| Type ctx.session | `Context & SessionFlavor<S>` | `BotContext<S>` (pre-built) |
-| Storage (dev) | In-memory Map (default) | MemorySessionStorage (default) |
-| Storage (prod) | `@grammyjs/storage-sqlite` | SqliteSessionStorage (planned) |
-| Session key | `chatId_userId` | Same |
-| Harness isolation | Manual setup | Automatic — fresh per spec |
+| Memory (default) | built-in | dev only — lost on restart |
+| Redis | `@grammyjs/storage-redis` | production default (fast, shared across instances) |
+| File | `@grammyjs/storage-file` | single-host, low volume |
+| free | `@grammyjs/storage-free` | zero-setup hobby (grammY-hosted) |
 
----
+Also published: PostgreSQL, MongoDB, Supabase adapters. All implement the same
+`StorageAdapter` interface, so swapping is a one-line change.
+
+### lazySession
+
+`lazySession` reads storage only when you actually touch `ctx.session` (await it), saving a
+fetch on updates that ignore state:
+
+```ts
+import { lazySession, LazySessionFlavor } from "grammy";
+type MyContext = Context & LazySessionFlavor<SessionData>;
+bot.use(lazySession({ initial, storage }));
+bot.command("inc", async (ctx) => { const s = await ctx.session; s.count++; });
+```
+
+## Designing the shape
+
+- **Small & serializable.** Sessions are JSON round-tripped to storage. Store IDs and
+  primitives, not class instances, big blobs, or secrets.
+- **State machine for flows.** A `step` field (`"idle" | "awaiting_name"`) drives manual
+  multi-step input. For anything beyond ~2 steps prefer
+  [telegram-bot-conversations](../telegram-bot-conversations/SKILL.md).
+- **Migrations.** Old stored sessions won't have new fields. Default safely in code
+  (`ctx.session.foo ??= []`) rather than assuming the shape.
 
 ## Common mistakes
 
-1. **Storing non-serializable data** — no functions, no class instances. Plain objects only.
-2. **Not initializing fields in `initial()`** — missing fields are `undefined`, not defaults.
-3. **Relying on session across restarts (MemoryStorage)** — ephemeral. Design flows restart-safe.
-4. **Session is per-chat, not per-user** — same user in different chats = different sessions.
-5. **Session key = `chatId_userId` string** — don't confuse with `chat.id` alone.
+1. **No persistent storage in prod** — default memory storage drops all state on restart/redeploy. Set a `storage` adapter.
+2. **Shared `initial` reference** — `initial: () => SHARED_OBJECT` leaks state across users. Return a new object literal each call.
+3. **Wrong key scope** — defaulting to per-chat when you meant per-user (or vice versa) in groups corrupts who-owns-what. Set `getSessionKey` deliberately.
+4. **Writing on an undefined key** — under a per-user key, user-less updates have no session. Guard `ctx.from`.
+5. **Storing secrets/large blobs** — sessions are plain JSON in shared storage; keep them small and non-sensitive.
+6. **Assuming the shape exists** — after a schema change, old sessions lack new fields. Default with `??=`.
+7. **Multi-instance with file/memory** — only Redis (or a DB) is safe when several bot instances share a token's load → [telegram-bot-scaling](../telegram-bot-scaling/SKILL.md).
+
+## Quick reference
+
+```ts
+type MyContext = Context & SessionFlavor<SessionData>
+session({ initial: () => ({...}), storage?, getSessionKey?, prefix? })
+ctx.session.<field>                          // read/write, auto-persists after handler
+lazySession({ initial, storage }) + await ctx.session     // deferred read
+new RedisAdapter({ instance: redis })        // @grammyjs/storage-redis
+```

@@ -18,12 +18,14 @@ How to test a Telegram bot when declarative specs run out of road — mocking th
 bot's own dependencies, forcing Telegram API failures, and dropping to raw
 `handleUpdate` tests.
 
-> **Built for the agntdev pipeline.** Read [telegram-test-specs](../telegram-test-specs/SKILL.md)
-> **first** — it owns the tokenless harness model, the BotSpec JSON format, and
-> the coverage gate. This skill is the escape hatch for the cases that JSON
-> can't express. See [agnt-cli-builder](../agnt-cli-builder/SKILL.md) for the
-> discovery-and-claim loop, and [telegram-bot-basics](../telegram-bot-basics/SKILL.md)
-> for the `makeBot()` factory these tests rely on.
+> **Built for the agntdev pipeline (platform tool tier).** Read
+> [telegram-test-specs](../telegram-test-specs/SKILL.md) **first** — it owns the
+> tokenless harness model, the BotSpec JSON format, the coverage gate, and the
+> `makeBot()` factory these tests rely on. This skill is the escape hatch for cases
+> JSON can't express. The framework-agnostic version of these programmatic patterns
+> (transformer capture, `handleUpdate`, failure injection) is
+> [telegram-bot-testing](../telegram-bot-testing/SKILL.md); see
+> [agnt-cli-builder](../agnt-cli-builder/SKILL.md) for the claim loop.
 
 ---
 
