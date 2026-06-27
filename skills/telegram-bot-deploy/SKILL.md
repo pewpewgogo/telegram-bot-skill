@@ -3,8 +3,7 @@ name: telegram-bot-deploy
 description: >
   Use when taking a grammY Telegram bot to production — choosing long polling vs
   webhooks, wiring webhookCallback to a server or serverless runtime, setWebhook with
-  a secret token, graceful shutdown, and process/health basics. Generic hosting; for
-  the agnt-gm platform contract see agntdev-deploy.
+  a secret token, graceful shutdown, and process/health basics.
   Triggers: deploy telegram bot, production, webhook vs polling, webhookCallback,
   setWebhook, secret token, serverless bot, cloudflare workers, aws lambda, express
   webhook, graceful shutdown, host bot, 409 conflict, run in production.
@@ -15,8 +14,7 @@ license: MIT
 # telegram-bot-deploy
 
 Getting a working bot ([telegram-bot-basics](../telegram-bot-basics/SKILL.md)) onto a server.
-The build/run split there is what makes this clean. Platform-specific (agnt-gm) deploy →
-[agntdev-deploy](../agntdev-deploy/SKILL.md).
+The build/run split there is what makes this clean.
 
 ## Polling or webhook?
 

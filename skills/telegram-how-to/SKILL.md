@@ -1,15 +1,14 @@
 ---
 name: telegram-how-to
 description: >
-  Telegram bot skills orchestrator — for any bot task, load the right skill(s)
-  together. Routes to the general grammY core (basics, ui, sessions, conversations,
-  messages, scaling, deploy, payments, mini-apps, testing, security) and the agnt-gm
-  platform tier (agnt-cli-builder, telegram-test-specs/-advanced, agntdev-deploy).
-  Disambiguates overlapping topics (sessions vs conversations, ui vs callback routing,
-  general testing vs BotSpec harness, polling vs webhook).
+  Telegram bot skills orchestrator — for any grammY bot task, load the right
+  skill(s) together. Routes to basics, ui, sessions, conversations, messages,
+  scaling, deploy, payments, mini-apps, testing, and security, and disambiguates
+  overlapping topics (sessions vs conversations, ui vs callback routing, polling
+  vs webhook).
   Triggers: telegram bot, how to build telegram bot, which telegram skill, grammY,
   bot skill routing, /telegram-how-to, organize bot work, telegram bot help.
-compatibility: General skills need grammY v1 (Node 18+/Deno). The agnt-gm tier needs the agnt CLI + that platform.
+compatibility: grammY v1 (Node 18+/Deno). Framework-agnostic — no platform lock-in.
 license: MIT
 user-invocable: true
 ---
@@ -21,11 +20,6 @@ user-invocable: true
 - **Orchestrate** — load the primary skill plus all applicable secondary skills at the start of any bot task.
 - **Disambiguate** — when two skills seem to overlap, show the boundary. See [disambiguation.md](references/disambiguation.md).
 - **Configure** — write a `## Telegram bot rules` block into the project's `CLAUDE.md`/`AGENTS.md`. Follow [project-config.md](references/project-config.md).
-
-## Two tiers
-
-- **General grammY core** — framework knowledge, works for any bot. Default to these.
-- **agnt-gm platform tier** — correct but *platform-specific* (the agnt-gm bounty pipeline): `agnt-cli-builder`, `telegram-test-specs`, `telegram-test-advanced`, `agntdev-deploy`. Load these **only** when the user is working on that platform (mentions agnt/agntdev/TON/claim/BotSpec/harness). For generic bots, use the general core.
 
 ## Skill loading
 
@@ -40,20 +34,12 @@ user-invocable: true
 | Go to production / webhook vs polling / hosting | [telegram-bot-deploy](../telegram-bot-deploy/SKILL.md) | security (webhook secret), sessions (Redis) |
 | Charge money / Stars / invoices | [telegram-bot-payments](../telegram-bot-payments/SKILL.md) | — |
 | Mini App / Web App / initData / inline mode | [telegram-bot-mini-apps](../telegram-bot-mini-apps/SKILL.md) | security (validate initData) |
-| Write tests (generic) | [telegram-bot-testing](../telegram-bot-testing/SKILL.md) | the domain skill under test |
+| Write tests | [telegram-bot-testing](../telegram-bot-testing/SKILL.md) | the domain skill under test |
 | Harden / authz / token / input validation | [telegram-bot-security](../telegram-bot-security/SKILL.md) | deploy (webhook secret) |
-| **agnt-gm:** find/claim paid task, ship PR | [agnt-cli-builder](../agnt-cli-builder/SKILL.md) | the general skill for the task type |
-| **agnt-gm:** BotSpec specs / coverage gate | [telegram-test-specs](../telegram-test-specs/SKILL.md) | telegram-bot-testing (the general layer) |
-| **agnt-gm:** mocks / error-path / payment tests | [telegram-test-advanced](../telegram-test-advanced/SKILL.md) | telegram-test-specs |
-| **agnt-gm:** platform deploy / dist/index.js / Redis contract | [agntdev-deploy](../agntdev-deploy/SKILL.md) | telegram-bot-deploy (generic concepts) |
 
 ## Cold-start decision tree
 
 ```
-On the agnt-gm platform? (agnt / agntdev / TON / claim / BotSpec / harness)
-  YES → agnt-cli-builder first; then the general skill for the task; agntdev-deploy / test-specs for those areas
-  NO  ↓ (generic grammY bot — use the general core)
-
 Handlers, routing, entry point, project layout?   → telegram-bot-basics
 Buttons / keyboards / menus / pagination?          → telegram-bot-ui (+ basics for callbacks)
 Multi-step ask→wait→branch dialog?                 → telegram-bot-conversations
@@ -79,16 +65,14 @@ Full catalog with "use when" hooks: [by-category.md](references/by-category.md).
 | Production | `telegram-bot-deploy` `telegram-bot-scaling` `telegram-bot-security` |
 | Advanced | `telegram-bot-payments` `telegram-bot-mini-apps` |
 | Testing | `telegram-bot-testing` |
-| agnt-gm tier | `agnt-cli-builder` `telegram-test-specs` `telegram-test-advanced` `agntdev-deploy` |
 
 ## Competing clusters — boundary lines
 
 Full tables with routing examples: [disambiguation.md](references/disambiguation.md). Key clusters:
 
-- **State**: `telegram-bot-sessions` (long-lived per-key state) vs `telegram-bot-conversations` (linear ask→wait flows). 1–2 steps → session `step`; longer → conversations.
+- **State**: `telegram-bot-sessions` (long-lived per-key state) vs `telegram-bot-conversations` (linear ask→wait flows). 1–2 steps → a session `step`; longer → conversations.
 - **UI**: `telegram-bot-ui` (build keyboards, menus) vs `telegram-bot-basics` (register & answer `callbackQuery`).
-- **Testing**: `telegram-bot-testing` (generic transformer + `handleUpdate`) vs `telegram-test-specs` (agnt-gm BotSpec/coverage gate).
-- **Deploy**: `telegram-bot-deploy` (generic webhook/polling/hosting) vs `agntdev-deploy` (agnt-gm container contract).
+- **Deploy**: `telegram-bot-deploy` (webhook/polling/hosting) vs `telegram-bot-scaling` (concurrency, rate limits) — go to production vs handle load.
 
 ## Universal rules (every bot task)
 
